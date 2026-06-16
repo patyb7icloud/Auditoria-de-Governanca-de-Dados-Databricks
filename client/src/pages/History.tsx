@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Shield, Plus, ArrowRight, Clock, Database,
-  TrendingUp, TrendingDown, Minus, BarChart3
+  TrendingUp, TrendingDown, Minus, BarChart3, Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Dot
+  ResponsiveContainer, ReferenceLine,
 } from "recharts";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -45,10 +45,12 @@ function CustomTooltip({ active, payload, label }: any) {
   const entry = payload[0];
   const score = entry?.value as number;
   const catalog = entry?.payload?.catalog as string;
+  const host = entry?.payload?.host as string;
   return (
-    <div className="bg-card border border-border rounded-xl shadow-xl p-4 min-w-[180px]">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className="font-mono text-gold text-xs mb-2">{catalog}</p>
+    <div className="bg-card border border-border rounded-xl shadow-xl p-4 min-w-[200px]">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p className="font-mono text-gold text-xs mb-1 truncate">{catalog}</p>
+      {host && <p className="text-[10px] text-muted-foreground mb-2 truncate">{host}</p>}
       <div className="flex items-center gap-2">
         <span className="text-2xl font-bold font-display" style={{ color: scoreColor(score) }}>
           {score}
@@ -77,7 +79,7 @@ function CustomDot(props: any) {
   );
 }
 
-// ─── Score Trend Indicator ────────────────────────────────────────────────────
+// ─── Trend Indicator ──────────────────────────────────────────────────────────
 
 function TrendIndicator({ current, previous }: { current: number; previous: number | null }) {
   if (previous == null) return null;
@@ -99,34 +101,104 @@ function TrendIndicator({ current, previous }: { current: number; previous: numb
   );
 }
 
+// ─── Catalog Selector ─────────────────────────────────────────────────────────
+
+function CatalogSelector({
+  catalogs,
+  selected,
+  onChange,
+}: {
+  catalogs: string[];
+  selected: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+        <Filter className="w-3.5 h-3.5" />
+        Catálogo:
+      </span>
+      {/* "Todos" pill */}
+      <button
+        onClick={() => onChange("__all__")}
+        className={cn(
+          "px-3 py-1 rounded-full text-xs font-semibold border transition-all",
+          selected === "__all__"
+            ? "bg-gold text-white border-gold shadow-sm"
+            : "bg-transparent text-muted-foreground border-border hover:border-gold/40 hover:text-foreground"
+        )}
+      >
+        Todos
+      </button>
+      {catalogs.map((cat) => (
+        <button
+          key={cat}
+          onClick={() => onChange(cat)}
+          className={cn(
+            "px-3 py-1 rounded-full text-xs font-mono font-semibold border transition-all",
+            selected === cat
+              ? "bg-gold text-white border-gold shadow-sm"
+              : "bg-transparent text-muted-foreground border-border hover:border-gold/40 hover:text-foreground"
+          )}
+        >
+          {cat}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function History() {
   const { data: sessions, isLoading } = trpc.databricks.listSessions.useQuery();
+  const [selectedCatalog, setSelectedCatalog] = useState<string>("__all__");
 
-  // Build chart data — only completed sessions with a score, sorted oldest → newest
+  // All unique catalogs from completed sessions
+  const catalogs = useMemo(() => {
+    if (!sessions) return [];
+    const set = new Set(
+      sessions
+        .filter((s) => s.status === "completed" && s.governanceScore != null)
+        .map((s) => s.targetCatalog)
+        .filter(Boolean) as string[]
+    );
+    return Array.from(set).sort();
+  }, [sessions]);
+
+  // Chart data filtered by selected catalog
   const chartData = useMemo(() => {
     if (!sessions) return [];
     return sessions
-      .filter((s) => s.status === "completed" && s.governanceScore != null)
+      .filter((s) => {
+        if (s.status !== "completed" || s.governanceScore == null) return false;
+        if (selectedCatalog !== "__all__" && s.targetCatalog !== selectedCatalog) return false;
+        return true;
+      })
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       .map((s) => ({
         date: new Date(s.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
         score: Math.round(s.governanceScore!),
         catalog: s.targetCatalog,
+        host: s.databricksHost,
         id: s.id,
       }));
-  }, [sessions]);
+  }, [sessions, selectedCatalog]);
 
   const hasChart = chartData.length >= 2;
-
-  // Latest vs previous score for summary stats
   const latestScore = chartData.length > 0 ? chartData[chartData.length - 1]?.score ?? null : null;
   const prevScore = chartData.length > 1 ? chartData[chartData.length - 2]?.score ?? null : null;
   const avgScore = chartData.length > 0
     ? Math.round(chartData.reduce((acc, d) => acc + d.score, 0) / chartData.length)
     : null;
   const maxScore = chartData.length > 0 ? Math.max(...chartData.map((d) => d.score)) : null;
+
+  // Filtered session list
+  const filteredSessions = useMemo(() => {
+    if (!sessions) return [];
+    if (selectedCatalog === "__all__") return sessions;
+    return sessions.filter((s) => s.targetCatalog === selectedCatalog);
+  }, [sessions, selectedCatalog]);
 
   return (
     <AppLayout>
@@ -150,7 +222,6 @@ export default function History() {
             <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           </div>
         ) : !sessions || sessions.length === 0 ? (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center py-24 animate-fade-in-up">
             <div className="w-16 h-16 rounded-2xl gradient-gold flex items-center justify-center mb-5 shadow-lg">
               <Shield className="w-8 h-8 text-white" />
@@ -166,49 +237,66 @@ export default function History() {
         ) : (
           <>
             {/* ── Score Evolution Chart ───────────────────────────────────── */}
-            {hasChart ? (
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-lg animate-fade-in-up" style={{ animationDelay: "40ms" }}>
-                {/* Chart header */}
-                <div className="flex items-start justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl gradient-gold flex items-center justify-center shadow-md">
-                      <BarChart3 className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="font-display text-lg font-bold text-foreground">Evolução do Score de Governança</h2>
-                      <p className="text-xs text-muted-foreground mt-0.5">{chartData.length} auditorias concluídas</p>
-                    </div>
-                  </div>
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-lg animate-fade-in-up" style={{ animationDelay: "40ms" }}>
 
-                  {/* Summary stats */}
-                  <div className="hidden md:flex items-center gap-6">
-                    {latestScore != null && (
-                      <div className="text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Último Score</p>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-display text-2xl font-bold" style={{ color: scoreColor(latestScore) }}>
-                            {latestScore}
-                          </span>
-                          <TrendIndicator current={latestScore} previous={prevScore} />
-                        </div>
-                      </div>
-                    )}
-                    {avgScore != null && (
-                      <div className="text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Média</p>
-                        <span className="font-display text-2xl font-bold text-foreground">{avgScore}</span>
-                      </div>
-                    )}
-                    {maxScore != null && (
-                      <div className="text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Máximo</p>
-                        <span className="font-display text-2xl font-bold text-success">{maxScore}</span>
-                      </div>
-                    )}
+              {/* Chart header row */}
+              <div className="flex items-start justify-between mb-5 flex-wrap gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl gradient-gold flex items-center justify-center shadow-md flex-shrink-0">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-lg font-bold text-foreground">Evolução do Score de Governança</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {chartData.length} auditoria{chartData.length !== 1 ? "s" : ""} concluída{chartData.length !== 1 ? "s" : ""}
+                      {selectedCatalog !== "__all__" && (
+                        <> · catálogo <span className="font-mono text-gold">{selectedCatalog}</span></>
+                      )}
+                    </p>
                   </div>
                 </div>
 
-                {/* Recharts LineChart */}
+                {/* Summary stats */}
+                <div className="hidden md:flex items-center gap-6">
+                  {latestScore != null && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Último Score</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-display text-2xl font-bold" style={{ color: scoreColor(latestScore) }}>
+                          {latestScore}
+                        </span>
+                        <TrendIndicator current={latestScore} previous={prevScore} />
+                      </div>
+                    </div>
+                  )}
+                  {avgScore != null && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Média</p>
+                      <span className="font-display text-2xl font-bold text-foreground">{avgScore}</span>
+                    </div>
+                  )}
+                  {maxScore != null && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Máximo</p>
+                      <span className="font-display text-2xl font-bold text-success">{maxScore}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Catalog selector */}
+              {catalogs.length > 1 && (
+                <div className="mb-5 pb-5 border-b border-border">
+                  <CatalogSelector
+                    catalogs={catalogs}
+                    selected={selectedCatalog}
+                    onChange={setSelectedCatalog}
+                  />
+                </div>
+              )}
+
+              {/* Chart or placeholder */}
+              {hasChart ? (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 8, right: 16, left: -8, bottom: 0 }}>
@@ -227,15 +315,12 @@ export default function History() {
                         tickLine={false}
                       />
                       <Tooltip content={<CustomTooltip />} cursor={{ stroke: "hsl(var(--border))", strokeWidth: 1 }} />
-
-                      {/* Reference bands */}
                       <ReferenceLine y={80} stroke="#22c55e" strokeDasharray="4 4" strokeOpacity={0.4}
                         label={{ value: "Excelente", position: "insideTopRight", fill: "#22c55e", fontSize: 10 }} />
                       <ReferenceLine y={60} stroke="#f59e0b" strokeDasharray="4 4" strokeOpacity={0.4}
                         label={{ value: "Bom", position: "insideTopRight", fill: "#f59e0b", fontSize: 10 }} />
                       <ReferenceLine y={40} stroke="#f97316" strokeDasharray="4 4" strokeOpacity={0.4}
                         label={{ value: "Regular", position: "insideTopRight", fill: "#f97316", fontSize: 10 }} />
-
                       <Line
                         type="monotone"
                         dataKey="score"
@@ -247,119 +332,158 @@ export default function History() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-
-                {/* Legend */}
-                <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border flex-wrap">
-                  {[
-                    { color: "#22c55e", label: "Excelente (≥ 80)" },
-                    { color: "#f59e0b", label: "Bom (60–79)" },
-                    { color: "#f97316", label: "Regular (40–59)" },
-                    { color: "#ef4444", label: "Crítico (< 40)" },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
-                      <span className="text-xs text-muted-foreground">{item.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : sessions.filter((s) => s.status === "completed").length === 1 ? (
-              /* Single audit — teaser card */
-              <div className="bg-card border border-border rounded-2xl p-6 animate-fade-in-up" style={{ animationDelay: "40ms" }}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl gradient-gold flex items-center justify-center shadow-md">
-                    <BarChart3 className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="font-display text-lg font-bold text-foreground">Evolução do Score</h2>
-                    <p className="text-xs text-muted-foreground">O gráfico será exibido após a segunda auditoria concluída</p>
-                  </div>
-                </div>
+              ) : chartData.length === 1 ? (
                 <div className="h-24 flex items-center justify-center rounded-xl bg-muted/30 border border-dashed border-border">
-                  <p className="text-sm text-muted-foreground">Execute mais uma auditoria para visualizar a tendência</p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCatalog !== "__all__"
+                      ? `Apenas 1 auditoria para "${selectedCatalog}" — execute mais uma para ver a tendência`
+                      : "Execute mais uma auditoria para visualizar a tendência"}
+                  </p>
                 </div>
+              ) : (
+                <div className="h-24 flex items-center justify-center rounded-xl bg-muted/30 border border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedCatalog !== "__all__"
+                      ? `Nenhuma auditoria concluída para o catálogo "${selectedCatalog}"`
+                      : "Nenhuma auditoria concluída ainda"}
+                  </p>
+                </div>
+              )}
+
+              {/* Legend */}
+              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border flex-wrap">
+                {[
+                  { color: "#22c55e", label: "Excelente (≥ 80)" },
+                  { color: "#f59e0b", label: "Bom (60–79)" },
+                  { color: "#f97316", label: "Regular (40–59)" },
+                  { color: "#ef4444", label: "Crítico (< 40)" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                    <span className="text-xs text-muted-foreground">{item.label}</span>
+                  </div>
+                ))}
               </div>
-            ) : null}
+            </div>
 
             {/* ── Session List ─────────────────────────────────────────────── */}
             <div className="space-y-3 animate-fade-in-up" style={{ animationDelay: "80ms" }}>
-              <h2 className="font-display text-lg font-semibold text-foreground px-1">Todas as Auditorias</h2>
-              {sessions.map((session, i) => {
-                // Find previous completed session score for delta
-                const completedBefore = sessions
-                  .filter((s) => s.status === "completed" && s.governanceScore != null && new Date(s.createdAt) < new Date(session.createdAt))
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-                const prevSessionScore = completedBefore[0]?.governanceScore ?? null;
-
-                return (
-                  <div
-                    key={session.id}
-                    className="bg-card border border-border rounded-xl p-5 hover:border-gold/20 transition-all animate-fade-in-up"
-                    style={{ animationDelay: `${i * 40}ms` }}
+              <div className="flex items-center justify-between px-1">
+                <h2 className="font-display text-lg font-semibold text-foreground">
+                  {selectedCatalog === "__all__" ? "Todas as Auditorias" : `Auditorias · ${selectedCatalog}`}
+                </h2>
+                {selectedCatalog !== "__all__" && (
+                  <button
+                    onClick={() => setSelectedCatalog("__all__")}
+                    className="text-xs text-muted-foreground hover:text-gold transition-colors underline underline-offset-2"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-gold-subtle border border-gold/20 flex items-center justify-center flex-shrink-0">
-                        <Database className="w-5 h-5 text-gold" />
-                      </div>
+                    Limpar filtro
+                  </button>
+                )}
+              </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p className="font-semibold text-foreground text-sm truncate">{session.databricksHost}</p>
-                          <Badge
-                            variant="outline"
-                            className={cn("text-[10px] flex-shrink-0",
-                              session.status === "completed" ? "text-success border-success/30"
-                              : session.status === "failed" ? "text-destructive border-destructive/30"
-                              : "text-warning border-warning/30"
-                            )}
-                          >
-                            {session.status === "completed" ? "Concluída" : session.status === "failed" ? "Falhou" : "Executando"}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                          <span className="font-mono text-gold/70">{session.targetCatalog}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(session.createdAt).toLocaleDateString("pt-BR", {
-                              day: "2-digit", month: "short", year: "numeric",
-                              hour: "2-digit", minute: "2-digit"
-                            })}
-                          </span>
-                          {session.totalTables != null && (
-                            <>
-                              <span>·</span>
-                              <span>{session.totalTables} tabelas</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
+              {filteredSessions.length === 0 ? (
+                <div className="flex items-center justify-center py-10 rounded-xl border border-dashed border-border">
+                  <p className="text-sm text-muted-foreground">Nenhuma auditoria encontrada para este catálogo.</p>
+                </div>
+              ) : (
+                filteredSessions.map((session, i) => {
+                  const completedBefore = sessions!
+                    .filter((s) =>
+                      s.status === "completed" &&
+                      s.governanceScore != null &&
+                      s.targetCatalog === session.targetCatalog &&
+                      new Date(s.createdAt) < new Date(session.createdAt)
+                    )
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                  const prevSessionScore = completedBefore[0]?.governanceScore ?? null;
 
-                      <div className="flex items-center gap-4 flex-shrink-0">
-                        <div className="text-center hidden sm:block">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Score</p>
-                          <div className="flex items-center gap-1.5 justify-center">
-                            <ScoreBadge score={session.governanceScore} />
-                            {session.status === "completed" && session.governanceScore != null && (
-                              <TrendIndicator
-                                current={Math.round(session.governanceScore)}
-                                previous={prevSessionScore != null ? Math.round(prevSessionScore) : null}
-                              />
+                  return (
+                    <div
+                      key={session.id}
+                      className={cn(
+                        "bg-card border rounded-xl p-5 hover:border-gold/20 transition-all animate-fade-in-up",
+                        selectedCatalog !== "__all__" && session.targetCatalog === selectedCatalog
+                          ? "border-gold/20"
+                          : "border-border"
+                      )}
+                      style={{ animationDelay: `${i * 40}ms` }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-gold-subtle border border-gold/20 flex items-center justify-center flex-shrink-0">
+                          <Database className="w-5 h-5 text-gold" />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="font-semibold text-foreground text-sm truncate">{session.databricksHost}</p>
+                            <Badge
+                              variant="outline"
+                              className={cn("text-[10px] flex-shrink-0",
+                                session.status === "completed" ? "text-success border-success/30"
+                                : session.status === "failed" ? "text-destructive border-destructive/30"
+                                : "text-warning border-warning/30"
+                              )}
+                            >
+                              {session.status === "completed" ? "Concluída" : session.status === "failed" ? "Falhou" : "Executando"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                            <button
+                              onClick={() => setSelectedCatalog(session.targetCatalog)}
+                              className={cn(
+                                "font-mono transition-colors",
+                                selectedCatalog === session.targetCatalog
+                                  ? "text-gold font-semibold"
+                                  : "text-gold/70 hover:text-gold"
+                              )}
+                              title="Filtrar por este catálogo"
+                            >
+                              {session.targetCatalog}
+                            </button>
+                            <span>·</span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {new Date(session.createdAt).toLocaleDateString("pt-BR", {
+                                day: "2-digit", month: "short", year: "numeric",
+                                hour: "2-digit", minute: "2-digit"
+                              })}
+                            </span>
+                            {session.totalTables != null && (
+                              <>
+                                <span>·</span>
+                                <span>{session.totalTables} tabelas</span>
+                              </>
                             )}
                           </div>
                         </div>
-                        {session.status === "completed" && (
-                          <Button asChild size="sm" variant="outline" className="border-border hover:border-gold/40 h-8 text-xs">
-                            <Link href={`/dashboard/${session.id}`}>
-                              Ver Dashboard <ArrowRight className="w-3 h-3 ml-1.5" />
-                            </Link>
-                          </Button>
-                        )}
+
+                        <div className="flex items-center gap-4 flex-shrink-0">
+                          <div className="text-center hidden sm:block">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Score</p>
+                            <div className="flex items-center gap-1.5 justify-center">
+                              <ScoreBadge score={session.governanceScore} />
+                              {session.status === "completed" && session.governanceScore != null && (
+                                <TrendIndicator
+                                  current={Math.round(session.governanceScore)}
+                                  previous={prevSessionScore != null ? Math.round(prevSessionScore) : null}
+                                />
+                              )}
+                            </div>
+                          </div>
+                          {session.status === "completed" && (
+                            <Button asChild size="sm" variant="outline" className="border-border hover:border-gold/40 h-8 text-xs">
+                              <Link href={`/dashboard/${session.id}`}>
+                                Ver Dashboard <ArrowRight className="w-3 h-3 ml-1.5" />
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </>
         )}
