@@ -1,28 +1,275 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { z } from "zod";
+import {
+  testConnection,
+  analyzeStructure,
+  analyzeGlossary,
+  analyzeTags,
+  analyzeAccess,
+  analyzeLineage,
+  analyzeSecurity,
+  computeGovernanceScore,
+  GovernanceAnalysisData,
+} from "./databricks";
+import {
+  createAuditSession,
+  updateAuditSession,
+  getAuditSession,
+  getAuditSessionsByUser,
+  createAnalysisResult,
+  updateAnalysisResult,
+  getAnalysisResultsBySession,
+} from "./db";
+
+const databricksConfigSchema = z.object({
+  host: z.string().min(1),
+  token: z.string().min(1),
+  catalog: z.string().min(1),
+});
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
 
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  databricks: router({
+    // Test connection
+    testConnection: protectedProcedure
+      .input(databricksConfigSchema)
+      .mutation(async ({ input }) => {
+        return testConnection(input);
+      }),
+
+    // Start a full audit session
+    startAudit: protectedProcedure
+      .input(databricksConfigSchema)
+      .mutation(async ({ input, ctx }) => {
+        const sessionId = await createAuditSession({
+          userId: ctx.user.id,
+          databricksHost: input.host,
+          targetCatalog: input.catalog,
+          status: "running",
+        });
+
+        // Run all 6 analyses sequentially
+        const analysisTypes = ["structure", "glossary", "tags", "access", "lineage", "security"] as const;
+        const resultIds: Record<string, number> = {};
+
+        for (const type of analysisTypes) {
+          const rid = await createAnalysisResult({
+            sessionId,
+            analysisType: type,
+            status: "running",
+          });
+          resultIds[type] = rid;
+        }
+
+        const results: Partial<GovernanceAnalysisData> = {};
+        const errors: Record<string, string> = {};
+
+        // Structure
+        try {
+          const t0 = Date.now();
+          const data = await analyzeStructure(input);
+          results.structure = data;
+          await updateAnalysisResult(resultIds.structure, {
+            status: "completed",
+            resultData: data as any,
+            executionMs: Date.now() - t0,
+            score: 100,
+          });
+        } catch (e: any) {
+          errors.structure = e.message;
+          await updateAnalysisResult(resultIds.structure, { status: "failed", errorMessage: e.message });
+        }
+
+        // Glossary
+        try {
+          const t0 = Date.now();
+          const data = await analyzeGlossary(input);
+          results.glossary = data;
+          await updateAnalysisResult(resultIds.glossary, {
+            status: "completed",
+            resultData: data as any,
+            executionMs: Date.now() - t0,
+            score: data.summary.tableDocCoverage,
+          });
+        } catch (e: any) {
+          errors.glossary = e.message;
+          await updateAnalysisResult(resultIds.glossary, { status: "failed", errorMessage: e.message });
+        }
+
+        // Tags
+        try {
+          const t0 = Date.now();
+          const data = await analyzeTags(input);
+          results.tags = data;
+          await updateAnalysisResult(resultIds.tags, {
+            status: "completed",
+            resultData: data as any,
+            executionMs: Date.now() - t0,
+          });
+        } catch (e: any) {
+          errors.tags = e.message;
+          await updateAnalysisResult(resultIds.tags, { status: "failed", errorMessage: e.message });
+        }
+
+        // Access
+        try {
+          const t0 = Date.now();
+          const data = await analyzeAccess(input);
+          results.access = data;
+          await updateAnalysisResult(resultIds.access, {
+            status: "completed",
+            resultData: data as any,
+            executionMs: Date.now() - t0,
+          });
+        } catch (e: any) {
+          errors.access = e.message;
+          await updateAnalysisResult(resultIds.access, { status: "failed", errorMessage: e.message });
+        }
+
+        // Lineage
+        try {
+          const t0 = Date.now();
+          const data = await analyzeLineage(input);
+          results.lineage = data;
+          await updateAnalysisResult(resultIds.lineage, {
+            status: "completed",
+            resultData: data as any,
+            executionMs: Date.now() - t0,
+          });
+        } catch (e: any) {
+          errors.lineage = e.message;
+          await updateAnalysisResult(resultIds.lineage, { status: "failed", errorMessage: e.message });
+        }
+
+        // Security
+        try {
+          const t0 = Date.now();
+          const data = await analyzeSecurity(input);
+          results.security = data;
+          await updateAnalysisResult(resultIds.security, {
+            status: "completed",
+            resultData: data as any,
+            executionMs: Date.now() - t0,
+          });
+        } catch (e: any) {
+          errors.security = e.message;
+          await updateAnalysisResult(resultIds.security, { status: "failed", errorMessage: e.message });
+        }
+
+        // Compute governance score
+        let governanceScore = 0;
+        let recommendations: string[] = [];
+        let gaps: string[] = [];
+
+        if (results.structure && results.glossary && results.tags && results.access && results.lineage && results.security) {
+          const computed = computeGovernanceScore(results as GovernanceAnalysisData);
+          governanceScore = computed.score;
+          recommendations = computed.recommendations;
+          gaps = computed.gaps;
+
+          // Update each analysis with recommendations
+          for (const type of analysisTypes) {
+            if (resultIds[type]) {
+              await updateAnalysisResult(resultIds[type], {
+                recommendations: recommendations as any,
+                gaps: gaps as any,
+              });
+            }
+          }
+        }
+
+        const hasErrors = Object.keys(errors).length > 0;
+        const allFailed = Object.keys(errors).length === analysisTypes.length;
+
+        await updateAuditSession(sessionId, {
+          status: allFailed ? "failed" : "completed",
+          governanceScore,
+          totalCatalogs: results.structure?.summary.totalCatalogs ?? 0,
+          totalSchemas: results.structure?.summary.totalSchemas ?? 0,
+          totalTables: (results.structure?.summary.totalTables ?? 0) + (results.structure?.summary.totalViews ?? 0),
+          docCoverage: results.glossary?.summary.tableDocCoverage ?? 0,
+          tagCoverage: results.tags ? (results.tags.summary.totalTableTags / Math.max(1, (results.structure?.summary.totalTables ?? 1))) * 100 : 0,
+          errorMessage: hasErrors ? JSON.stringify(errors) : undefined,
+        });
+
+        return {
+          sessionId,
+          governanceScore,
+          recommendations,
+          gaps,
+          errors,
+          hasErrors,
+        };
+      }),
+
+    // Get session details with all analysis results
+    getSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const session = await getAuditSession(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) {
+          throw new Error("Session not found");
+        }
+        const analyses = await getAnalysisResultsBySession(input.sessionId);
+        return { session, analyses };
+      }),
+
+    // List sessions for current user
+    listSessions: protectedProcedure.query(async ({ ctx }) => {
+      return getAuditSessionsByUser(ctx.user.id);
+    }),
+
+    // Export report data
+    exportReport: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const session = await getAuditSession(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) {
+          throw new Error("Session not found");
+        }
+        const analyses = await getAnalysisResultsBySession(input.sessionId);
+
+        const report = {
+          metadata: {
+            exportedAt: new Date().toISOString(),
+            databricksHost: session.databricksHost,
+            targetCatalog: session.targetCatalog,
+            auditDate: session.createdAt,
+            governanceScore: session.governanceScore,
+          },
+          summary: {
+            totalCatalogs: session.totalCatalogs,
+            totalSchemas: session.totalSchemas,
+            totalTables: session.totalTables,
+            docCoverage: session.docCoverage,
+            tagCoverage: session.tagCoverage,
+          },
+          analyses: analyses.map((a) => ({
+            type: a.analysisType,
+            status: a.status,
+            score: a.score,
+            executionMs: a.executionMs,
+            data: a.resultData,
+            recommendations: a.recommendations,
+            gaps: a.gaps,
+          })),
+        };
+
+        return report;
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
