@@ -1,4 +1,5 @@
 import AppLayout from "@/components/AppLayout";
+import LineageGraph, { type LineageEdge } from "@/components/LineageGraph";
 import { trpc } from "@/lib/trpc";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -225,6 +226,10 @@ export default function Report() {
               const analysis = data.analyses.find((a) => a.type === type);
               if (!analysis) return null;
               const rows = flattenToRows(analysis.data);
+              const isLineage = type === "lineage";
+              const lineageEdges = isLineage
+                ? (((analysis.data as any)?.lineageEdges ?? []) as LineageEdge[])
+                : [];
               return (
                 <TabsContent key={type} value={type}>
                   <AnalysisCard
@@ -234,6 +239,20 @@ export default function Report() {
                     rows={rows}
                     onDownloadCSV={() => handleDownloadCSV(type)}
                   />
+                  {isLineage && (
+                    <div className="mt-4 bg-card border border-border rounded-xl p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <GitBranch className="w-4 h-4 text-gold" />
+                        <h3 className="font-semibold text-foreground text-sm">Visualização do Grafo de Linhagem</h3>
+                        {lineageEdges.length > 0 && (
+                          <Badge variant="outline" className="text-gold border-gold/30 bg-gold-subtle text-[10px] ml-1">
+                            {lineageEdges.length} relações
+                          </Badge>
+                        )}
+                      </div>
+                      <LineageGraph edges={lineageEdges} className="w-full" />
+                    </div>
+                  )}
                 </TabsContent>
               );
             })}

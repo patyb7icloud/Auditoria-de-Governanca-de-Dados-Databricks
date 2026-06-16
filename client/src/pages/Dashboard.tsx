@@ -1,4 +1,5 @@
 import AppLayout from "@/components/AppLayout";
+import LineageGraph, { type LineageEdge } from "@/components/LineageGraph";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -234,6 +235,34 @@ export default function Dashboard() {
             })}
           </div>
         </div>
+
+        {/* Lineage Graph */}
+        {lineageData && (
+          <div className="bg-card border border-border rounded-2xl p-6 animate-fade-in-up" style={{ animationDelay: "160ms" }}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <GitBranch className="w-5 h-5 text-gold" />
+                <h3 className="font-display font-bold text-foreground">Linhagem de Dados</h3>
+                {lineageData.summary?.totalEdges > 0 && (
+                  <Badge variant="outline" className="text-gold border-gold/30 bg-gold-subtle text-xs ml-1">
+                    {lineageData.summary.totalEdges} relações
+                  </Badge>
+                )}
+              </div>
+              {lineageData.summary?.totalEdges > 0 && (
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span>{lineageData.summary.uniqueSources ?? 0} origens</span>
+                  <span>·</span>
+                  <span>{lineageData.summary.uniqueTargets ?? 0} destinos</span>
+                </div>
+              )}
+            </div>
+            <LineageGraph
+              edges={(lineageData.lineageEdges ?? []) as LineageEdge[]}
+              className="w-full"
+            />
+          </div>
+        )}
 
         {/* Score Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up" style={{ animationDelay: "180ms" }}>

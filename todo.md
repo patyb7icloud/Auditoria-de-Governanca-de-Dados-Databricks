@@ -45,3 +45,10 @@
 ## Exportação de Relatório
 - [x] Exportação em JSON (todos os dados das 6 análises)
 - [x] Exportação em CSV (por análise e consolidado)
+
+## Grafo de Linhagem (React Flow)
+- [x] Instalar @xyflow/react
+- [x] Criar componente LineageGraph com nós e arestas interativos
+- [x] Integrar grafo no Dashboard (seção Linhagem de Dados)
+- [x] Suporte a zoom, pan, minimap e layout automático
+- [x] Estilo visual consistente com tema dark/light da aplicação
