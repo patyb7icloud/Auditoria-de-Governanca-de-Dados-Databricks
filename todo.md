@@ -61,3 +61,13 @@
 - [x] Adicionar botão "Exportar PDF" no Dashboard executivo
 - [x] Teste do endpoint de geração de PDF
 - [x] Teste de validação dos dados de entrada do endpoint PDF (sessionId inválido e ausente)
+
+## Gráfico de Evolução do Score (Histórico)
+- [x] LineChart Recharts com scores ordenados por data (mais antigo → mais recente)
+- [x] Tooltip customizado com score, catálogo e nível de maturidade
+- [x] Dots coloridos por faixa de score (verde/amarelo/laranja/vermelho)
+- [x] Linhas de referência horizontais para cada faixa (Excelente/Bom/Regular)
+- [x] Indicadores de tendência (TrendingUp/TrendingDown) por sessão na lista
+- [x] Estatísticas de resumo: último score, média e máximo
+- [x] Estado teaser quando há apenas 1 auditoria concluída
+- [x] Legenda de cores das faixas de maturidade
