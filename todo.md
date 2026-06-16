@@ -52,3 +52,12 @@
 - [x] Integrar grafo no Dashboard (seção Linhagem de Dados)
 - [x] Suporte a zoom, pan, minimap e layout automático
 - [x] Estilo visual consistente com tema dark/light da aplicação
+
+## Relatório Executivo em PDF
+- [x] Instalar @react-pdf/renderer no servidor
+- [x] Criar rota Express GET /api/report/:sessionId/pdf no backend
+- [x] Construir documento PDF com capa, score, KPIs, gráficos de barras, checklist e recomendações
+- [x] Adicionar botão "Exportar PDF" na página Report
+- [x] Adicionar botão "Exportar PDF" no Dashboard executivo
+- [x] Teste do endpoint de geração de PDF
+- [x] Teste de validação dos dados de entrada do endpoint PDF (sessionId inválido e ausente)

@@ -147,12 +147,24 @@ export default function Report() {
               Auditado em {new Date(data.metadata.auditDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <Button onClick={handleDownloadJSON} className="gradient-gold text-white font-semibold h-10">
               <FileJson className="w-4 h-4 mr-2" />Exportar JSON
             </Button>
             <Button onClick={() => handleDownloadCSV()} variant="outline" className="border-border hover:border-gold/40 h-10">
               <FileSpreadsheet className="w-4 h-4 mr-2" />Exportar CSV Completo
+            </Button>
+            <Button
+              variant="outline"
+              className="border-gold/40 text-gold hover:bg-gold/10 hover:border-gold h-10"
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = `/api/report/${sessionId}/pdf`;
+                a.download = `governance_report_${data.metadata.targetCatalog}_${new Date(data.metadata.auditDate).toISOString().slice(0, 10)}.pdf`;
+                a.click();
+              }}
+            >
+              <FileText className="w-4 h-4 mr-2" />Baixar PDF Executivo
             </Button>
           </div>
         </div>

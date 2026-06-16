@@ -140,6 +140,19 @@ export default function Dashboard() {
                 <Download className="w-4 h-4 mr-2" />Exportar Relatório
               </Link>
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-gold/40 text-gold hover:bg-gold/10 hover:border-gold"
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = `/api/report/${sessionId}/pdf`;
+                a.download = `governance_report_${session.targetCatalog}_${new Date(session.createdAt).toISOString().slice(0, 10)}.pdf`;
+                a.click();
+              }}
+            >
+              <FileText className="w-4 h-4 mr-2" />Baixar PDF
+            </Button>
             <Button asChild size="sm" className="gradient-gold text-white font-semibold">
               <Link href="/connect">
                 <RefreshCw className="w-4 h-4 mr-2" />Nova Auditoria
