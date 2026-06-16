@@ -231,6 +231,61 @@ export const appRouter = router({
       return getAuditSessionsByUser(ctx.user.id);
     }),
 
+    // Compare two audit sessions
+    compareSessions: protectedProcedure
+      .input(z.object({ sessionIdA: z.number(), sessionIdB: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const [sessionA, sessionB] = await Promise.all([
+          getAuditSession(input.sessionIdA),
+          getAuditSession(input.sessionIdB),
+        ]);
+        if (!sessionA || sessionA.userId !== ctx.user.id) throw new Error("Session A not found");
+        if (!sessionB || sessionB.userId !== ctx.user.id) throw new Error("Session B not found");
+
+        const [analysesA, analysesB] = await Promise.all([
+          getAnalysisResultsBySession(input.sessionIdA),
+          getAnalysisResultsBySession(input.sessionIdB),
+        ]);
+
+        // Extract grants count from access analysis resultData
+        const getGrantsCount = (analyses: typeof analysesA) => {
+          const access = analyses.find((a) => a.analysisType === "access");
+          if (!access?.resultData) return null;
+          const data = access.resultData as any;
+          return data?.summary?.totalGrants ?? data?.grants?.length ?? null;
+        };
+
+        // Build checklist comparison: each analysis status + score
+        const analysisLabels: Record<string, string> = {
+          structure: "Mapeamento de Estrutura",
+          glossary: "Glossário de Dados",
+          tags: "Classificação por Tags",
+          access: "Políticas de Acesso",
+          lineage: "Linhagem de Dados",
+          security: "Segurança Dinâmica",
+        };
+
+        const checklistA = analysesA.map((a) => ({
+          type: a.analysisType,
+          label: analysisLabels[a.analysisType] ?? a.analysisType,
+          status: a.status,
+          score: a.score,
+        }));
+        const checklistB = analysesB.map((a) => ({
+          type: a.analysisType,
+          label: analysisLabels[a.analysisType] ?? a.analysisType,
+          status: a.status,
+          score: a.score,
+        }));
+
+        return {
+          sessionA: { ...sessionA, grantsCount: getGrantsCount(analysesA) },
+          sessionB: { ...sessionB, grantsCount: getGrantsCount(analysesB) },
+          checklistA,
+          checklistB,
+        };
+      }),
+
     // Export report data
     exportReport: protectedProcedure
       .input(z.object({ sessionId: z.number() }))

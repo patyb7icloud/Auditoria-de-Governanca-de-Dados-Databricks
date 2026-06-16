@@ -71,3 +71,13 @@
 - [x] Estatísticas de resumo: último score, média e máximo
 - [x] Estado teaser quando há apenas 1 auditoria concluída
 - [x] Legenda de cores das faixas de maturidade
+
+## Comparação de Auditorias (Histórico)
+- [x] Modo de seleção na lista: checkboxes para selecionar exatamente 2 auditorias concluídas
+- [x] Botão "Comparar Selecionadas" ativo somente quando 2 estão selecionadas
+- [x] Tabela comparativa: score, catálogo, host, data, totais (catálogos/schemas/tabelas)
+- [x] Comparação de KPIs: cobertura de documentação, cobertura de tags, total de grants
+- [x] Indicadores visuais de delta (▲/▼) para cada métrica entre as duas auditorias
+- [x] Comparação de checklist de boas práticas (aprovado/reprovado por análise)
+- [x] Modal ou seção expansível para exibir a tabela comparativa
+- [x] Botão para fechar/limpar a comparação e voltar à lista normal
