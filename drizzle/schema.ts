@@ -1,23 +1,23 @@
 import {
-  int,
-  mysqlEnum,
-  mysqlTable,
+  integer,
+  serial,
+  pgTable,
   text,
   timestamp,
   varchar,
   json,
-  float,
-} from "drizzle-orm/mysql-core";
+  doublePrecision,
+} from "drizzle-orm/pg-core";
 
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: varchar("role", { length: 16 }).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
@@ -25,51 +25,40 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 // Sessões de auditoria do Databricks
-export const auditSessions = mysqlTable("audit_sessions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const auditSessions = pgTable("audit_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
   databricksHost: varchar("databricksHost", { length: 512 }).notNull(),
   targetCatalog: varchar("targetCatalog", { length: 256 }).notNull(),
-  status: mysqlEnum("status", ["pending", "running", "completed", "failed"])
-    .default("pending")
-    .notNull(),
-  governanceScore: float("governanceScore"),
-  totalCatalogs: int("totalCatalogs"),
-  totalSchemas: int("totalSchemas"),
-  totalTables: int("totalTables"),
-  docCoverage: float("docCoverage"),
-  tagCoverage: float("tagCoverage"),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  governanceScore: doublePrecision("governanceScore"),
+  totalCatalogs: integer("totalCatalogs"),
+  totalSchemas: integer("totalSchemas"),
+  totalTables: integer("totalTables"),
+  docCoverage: doublePrecision("docCoverage"),
+  tagCoverage: doublePrecision("tagCoverage"),
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type AuditSession = typeof auditSessions.$inferSelect;
 export type InsertAuditSession = typeof auditSessions.$inferInsert;
 
 // Resultados individuais de cada análise
-export const analysisResults = mysqlTable("analysis_results", {
-  id: int("id").autoincrement().primaryKey(),
-  sessionId: int("sessionId").notNull(),
-  analysisType: mysqlEnum("analysisType", [
-    "structure",
-    "glossary",
-    "tags",
-    "access",
-    "lineage",
-    "security",
-  ]).notNull(),
-  status: mysqlEnum("status", ["pending", "running", "completed", "failed"])
-    .default("pending")
-    .notNull(),
+export const analysisResults = pgTable("analysis_results", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("sessionId").notNull(),
+  analysisType: varchar("analysisType", { length: 32 }).notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
   resultData: json("resultData"),
   recommendations: json("recommendations"),
   gaps: json("gaps"),
-  score: float("score"),
-  executionMs: int("executionMs"),
+  score: doublePrecision("score"),
+  executionMs: integer("executionMs"),
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
 export type AnalysisResult = typeof analysisResults.$inferSelect;

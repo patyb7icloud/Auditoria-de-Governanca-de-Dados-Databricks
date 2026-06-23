@@ -1,14 +1,17 @@
 import { eq, desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { InsertUser, users, auditSessions, analysisResults, InsertAuditSession, InsertAnalysisResult } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _sql: ReturnType<typeof postgres> | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      if (!_sql) _sql = postgres(process.env.DATABASE_URL);
+      _db = drizzle(_sql);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -55,8 +58,8 @@ export async function getUserByOpenId(openId: string) {
 export async function createAuditSession(data: InsertAuditSession) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(auditSessions).values(data);
-  return (result as any).insertId as number;
+  const inserted = await db.insert(auditSessions).values(data).returning({ id: auditSessions.id });
+  return (inserted[0] as any).id as number;
 }
 
 export async function updateAuditSession(id: number, data: Partial<InsertAuditSession>) {
@@ -83,8 +86,8 @@ export async function getAuditSessionsByUser(userId: number) {
 export async function createAnalysisResult(data: InsertAnalysisResult) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(analysisResults).values(data);
-  return (result as any).insertId as number;
+  const inserted = await db.insert(analysisResults).values(data).returning({ id: analysisResults.id });
+  return (inserted[0] as any).id as number;
 }
 
 export async function updateAnalysisResult(id: number, data: Partial<InsertAnalysisResult>) {

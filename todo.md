@@ -81,3 +81,7 @@
 - [x] Comparação de checklist de boas práticas (aprovado/reprovado por análise)
 - [x] Modal ou seção expansível para exibir a tabela comparativa
 - [x] Botão para fechar/limpar a comparação e voltar à lista normal
+#Token patricia databricks pessoal
+token=dapi3c90775ad1d2ef75fdba80d9a56f59d5
+HOST_DATABRICKS=https://dbc-516436c3-b9dc.cloud.databricks.com
+CATÁLOGO_ALVO=test_schema

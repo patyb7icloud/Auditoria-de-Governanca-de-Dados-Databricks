@@ -62,10 +62,9 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const sessionId = parseInt(params.sessionId ?? "0");
 
-  const { data, isLoading, error } = trpc.databricks.getSession.useQuery(
-    { sessionId },
-    { enabled: !!sessionId, refetchInterval: false }
-  );
+  const queryKey = { sessionId };
+  const hook = import.meta.env.DEV ? trpc.databricks.getSessionPublic : trpc.databricks.getSession;
+  const { data, isLoading, error } = hook.useQuery(queryKey, { enabled: !!sessionId, refetchInterval: false });
 
   if (isLoading) {
     return (

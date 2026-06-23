@@ -226,6 +226,15 @@ export const appRouter = router({
         return { session, analyses };
       }),
 
+    // Public read-only session fetch (useful for local dev without auth)
+    getSessionPublic: publicProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input }) => {
+        const session = await getAuditSession(input.sessionId);
+        const analyses = await getAnalysisResultsBySession(input.sessionId);
+        return { session, analyses };
+      }),
+
     // List sessions for current user
     listSessions: protectedProcedure.query(async ({ ctx }) => {
       return getAuditSessionsByUser(ctx.user.id);

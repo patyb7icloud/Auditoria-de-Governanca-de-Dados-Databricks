@@ -20,6 +20,20 @@ export async function createContext(
     user = null;
   }
 
+  // In development, provide a default dev user only if explicitly enabled via DEV_AUTO_LOGIN.
+  if (!user && process.env.NODE_ENV !== "production" && process.env.DEV_AUTO_LOGIN === "true") {
+    user = {
+      id: 1,
+      openId: "dev-local",
+      name: "Dev User",
+      email: "dev@local",
+      loginMethod: "local",
+      role: "admin",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    } as unknown as User;
+  }
   return {
     req: opts.req,
     res: opts.res,

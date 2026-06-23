@@ -8,6 +8,21 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
+// Dynamic analytics loader (only when configured)
+if (import.meta.env.VITE_ANALYTICS_ENDPOINT) {
+  try {
+    const script = document.createElement("script");
+    script.defer = true;
+    script.src = `${import.meta.env.VITE_ANALYTICS_ENDPOINT}/umami`;
+    const websiteId = import.meta.env.VITE_ANALYTICS_WEBSITE_ID;
+    if (websiteId) script.setAttribute("data-website-id", websiteId);
+    document.head.appendChild(script);
+  } catch (e) {
+    // ignore analytics errors in dev
+    console.warn("Failed to load analytics", e);
+  }
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {

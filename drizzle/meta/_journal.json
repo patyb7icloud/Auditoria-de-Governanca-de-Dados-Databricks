@@ -1,19 +1,10 @@
 {
-  "version": "7",
-  "dialect": "mysql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1781620156773,
-      "tag": "0000_silly_wallow",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1781620258549,
-      "tag": "0001_crazy_wendell_vaughn",
+      "version": "7",
+      "when": 1782226010777,
+      "tag": "0000_dizzy_vargas",
       "breakpoints": true
     }
   ]

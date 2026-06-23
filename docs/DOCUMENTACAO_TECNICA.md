@@ -2,7 +2,7 @@
 
 **Versão:** 1.0.0  
 **Repositório:** [github.com/patyb7icloud/Auditoria-de-Governanca-de-Dados-Databricks](https://github.com/patyb7icloud/Auditoria-de-Governanca-de-Dados-Databricks)  
-**Stack principal:** React 19 · TypeScript · Tailwind CSS 4 · tRPC 11 · Express 4 · Drizzle ORM · MySQL
+**Stack principal:** React 19 · TypeScript · Tailwind CSS 4 · tRPC 11 · Express 4 · Drizzle ORM · PostgreSQL
 
 ---
 
@@ -70,7 +70,7 @@ A aplicação segue uma arquitetura monolítica de camada única com separação
 └──────────┬───────────────────────────┬───────────────────────────┘
            │                           │
 ┌──────────▼──────────┐   ┌────────────▼────────────────────────┐
-│   MySQL / TiDB      │   │   Databricks SQL REST API           │
+│   PostgreSQL        │   │   Databricks SQL REST API           │
 │   (Drizzle ORM)     │   │   /api/2.0/sql/warehouses           │
 │   audit_sessions    │   │   /api/2.0/sql/statements           │
 │   analysis_results  │   │   system.information_schema.*       │
@@ -98,10 +98,10 @@ O fluxo de uma auditoria completa é: o cliente chama `databricks.startAudit` vi
 | **Front-end** | shadcn/ui | — | Componentes de UI acessíveis |
 | **Back-end** | Express | 4.21 | Servidor HTTP |
 | **Back-end** | tRPC | 11.6 | Contrato de API type-safe |
-| **Back-end** | Drizzle ORM | 0.44 | ORM para MySQL |
+| **Back-end** | Drizzle ORM | 0.44 | ORM para PostgreSQL |
 | **Back-end** | @react-pdf/renderer | — | Geração de PDF no servidor |
 | **Back-end** | Zod | 4.1 | Validação de schemas |
-| **Banco de dados** | MySQL / TiDB | — | Persistência de sessões e resultados |
+| **Banco de dados** | PostgreSQL | — | Persistência de sessões e resultados |
 | **Build** | Vite | 7.1 | Bundler e dev server |
 | **Build** | esbuild | 0.25 | Compilação do servidor |
 | **Testes** | Vitest | 2.1 | Testes unitários |
@@ -158,7 +158,7 @@ databricks-governance-tool/
 
 ## 5. Banco de Dados
 
-O banco de dados utiliza MySQL (ou TiDB em produção cloud) gerenciado pelo Drizzle ORM. O schema é definido em `drizzle/schema.ts` e as migrações são aplicadas via `pnpm drizzle-kit generate` seguido de execução SQL direta.
+O banco de dados utiliza PostgreSQL (ou serviço compatível) gerenciado pelo Drizzle ORM. O schema é definido em `drizzle/schema.ts` e as migrações são aplicadas via `pnpm drizzle-kit generate` seguido de execução SQL direta.
 
 ### Tabela `users`
 
@@ -498,7 +498,7 @@ O token Databricks (PAT) é transmitido apenas no corpo das requisições tRPC e
 
 - Node.js ≥ 22.x
 - pnpm ≥ 10.x
-- MySQL 8.x (ou acesso a uma instância TiDB)
+- PostgreSQL 13+ (ou acesso a um serviço PostgreSQL gerenciado)
 - Workspace Databricks com Unity Catalog habilitado
 
 ### Passos
@@ -517,7 +517,7 @@ cp .env.example .env
 
 # 4. Aplicar o schema do banco de dados
 pnpm drizzle-kit generate
-# Copiar o SQL gerado e executar no banco MySQL
+# Copiar o SQL gerado e executar no banco PostgreSQL
 
 # 5. Iniciar o servidor de desenvolvimento
 pnpm dev
@@ -552,7 +552,7 @@ railway init
 railway up
 ```
 
-Configure as variáveis de ambiente listadas na seção 16 no painel do Railway. O banco de dados MySQL pode ser provisionado como um serviço adicional no mesmo projeto Railway.
+Configure as variáveis de ambiente listadas na seção 16 no painel do Railway. O banco de dados PostgreSQL pode ser provisionado como um serviço adicional no mesmo projeto Railway.
 
 ### Render
 
@@ -589,7 +589,7 @@ docker push <registry>/databricks-governance-tool
 
 | Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|
-| `DATABASE_URL` | Sim | Connection string MySQL: `mysql://user:pass@host:3306/db` |
+| `DATABASE_URL` | Sim | Connection string PostgreSQL: `postgres://user:pass@host:5432/db` |
 | `JWT_SECRET` | Sim | Segredo para assinar cookies de sessão (mínimo 32 caracteres) |
 | `VITE_APP_ID` | Sim | ID da aplicação Manus OAuth |
 | `OAUTH_SERVER_URL` | Sim | URL base do servidor OAuth Manus |
