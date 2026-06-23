@@ -24,6 +24,12 @@ export default function Connect() {
       if (data.ok) {
         setTestStatus("ok");
         setTestMessage(data.message);
+        // Save configuration to localStorage for later use
+        localStorage.setItem('databricks_config', JSON.stringify({
+          host: host.trim(),
+          token: token.trim(),
+          catalog: catalog.trim(),
+        }));
         toast.success("Conexão estabelecida com sucesso!");
       } else {
         setTestStatus("error");
@@ -40,6 +46,12 @@ export default function Connect() {
 
   const startAudit = trpc.databricks.startAudit.useMutation({
     onSuccess: (data) => {
+      // Save configuration to localStorage
+      localStorage.setItem('databricks_config', JSON.stringify({
+        host: host.trim(),
+        token: token.trim(),
+        catalog: catalog.trim(),
+      }));
       toast.success("Auditoria concluída!");
       navigate(`/dashboard/${data.sessionId}`);
     },

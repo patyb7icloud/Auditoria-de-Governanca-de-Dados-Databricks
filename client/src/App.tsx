@@ -10,6 +10,7 @@ import Audit from "./pages/Audit";
 import Dashboard from "./pages/Dashboard";
 import Report from "./pages/Report";
 import History from "./pages/History";
+import Compliance from "./pages/Compliance";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/connect" component={Connect} />
       <Route path="/audit/:sessionId" component={Audit} />
       <Route path="/dashboard/:sessionId" component={Dashboard} />
+      <Route path="/compliance/:sessionId?" component={Compliance} />
       <Route path="/report/:sessionId" component={Report} />
       <Route path="/history" component={History} />
       <Route path="/404" component={NotFound} />

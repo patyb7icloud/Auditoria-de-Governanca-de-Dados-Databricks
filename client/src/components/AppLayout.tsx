@@ -15,12 +15,14 @@ import {
   ChevronRight,
   Shield,
   Plug,
+  CheckCircle2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
 const navItems = [
   { href: "/connect", label: "Nova Auditoria", icon: Plug },
+  { href: "/compliance", label: "Compliance LGPD", icon: CheckCircle2 },
   { href: "/history", label: "Histórico", icon: History },
 ];
 

@@ -23,6 +23,7 @@ import {
   updateAnalysisResult,
   getAnalysisResultsBySession,
 } from "./db";
+import { analyzeLGPDCompliance, detectPIIColumns, generateLGPDRecommendations } from "./lgpd-compliance";
 
 const databricksConfigSchema = z.object({
   host: z.string().min(1),
@@ -332,6 +333,45 @@ export const appRouter = router({
         };
 
         return report;
+      }),
+  }),
+
+  // LGPD/GDPR Compliance Router
+  lgpd: router({
+    analyzeCompliance: protectedProcedure
+      .input(z.object({
+        databricksHost: z.string(),
+        databricksToken: z.string(),
+        catalog: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        // TODO: Implement real analysis with Databricks queries
+        // For now, return mock data with structure matching real analysis
+        return analyzeLGPDCompliance({
+          databricksHost: input.databricksHost,
+          databricksToken: input.databricksToken,
+          catalog: input.catalog,
+        });
+      }),
+
+    detectTablePII: protectedProcedure
+      .input(z.object({
+        columns: z.array(z.object({
+          name: z.string(),
+          type: z.string(),
+        })),
+        sampleData: z.record(z.any()).optional(),
+      }))
+      .query(({ input }) => {
+        return detectPIIColumns(input.columns, input.sampleData);
+      }),
+
+    generateRecommendations: protectedProcedure
+      .input(z.object({
+        analysis: z.any(),
+      }))
+      .query(({ input }) => {
+        return generateLGPDRecommendations(input.analysis);
       }),
   }),
 });
