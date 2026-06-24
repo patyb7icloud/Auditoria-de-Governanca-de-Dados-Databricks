@@ -1,3 +1,4 @@
+import React from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -29,9 +30,24 @@ function Router() {
 }
 
 function App() {
+  // Load saved theme on app start
+  React.useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    if (savedTheme) {
+      const root = document.documentElement;
+      if (savedTheme === "light") {
+        root.classList.remove("dark");
+        root.classList.add("light");
+      } else {
+        root.classList.add("dark");
+        root.classList.remove("light");
+      }
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark" switchable>
+      <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster richColors position="top-right" />
           <Router />
