@@ -107,14 +107,15 @@ export async function generateSelfHealingSuggestions(
     const suggestions: SelfHealingSuggestion[] = [];
 
     // Sugestão para a tabela
+    const tableTags = result.tableTags ?? [];
     suggestions.push({
       tableName,
       suggestedDescription: result.tableDescription,
-      suggestedTags: result.tableTags,
+      suggestedTags: tableTags,
       confidenceScore: 0.95,
       reasoning: result.reasoning,
       sqlCommand: `COMMENT ON TABLE ${config.catalog}.${schema}.${tableName} IS '${result.tableDescription.replace(/'/g, "''")}';\n` +
-                  result.tableTags.map((tag: string) => `ALTER TABLE ${config.catalog}.${schema}.${tableName} SET TAGS ('${tag}' = 'true');`).join('\n')
+                  tableTags.map((tag: string) => `ALTER TABLE ${config.catalog}.${schema}.${tableName} SET TAGS ('${tag}' = 'true');`).join('\n')
     });
 
     // Sugestões para as colunas

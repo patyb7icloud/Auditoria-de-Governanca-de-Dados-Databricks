@@ -135,15 +135,20 @@ export async function analyzeStructure(config: DatabricksConfig) {
   const schemasResult = await executeStatement(config, `SELECT catalog_name, schema_name, schema_owner, comment FROM system.information_schema.schemata WHERE catalog_name = '${config.catalog}'`);
   const tablesResult = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, table_type, table_owner FROM system.information_schema.tables WHERE table_catalog = '${config.catalog}'`);
 
+  // Ensure rows are arrays (defensive programming)
+  const catalogsRows = catalogsResult?.rows ?? [];
+  const schemasRows = schemasResult?.rows ?? [];
+  const tablesRows = tablesResult?.rows ?? [];
+
   return {
-    catalogs: catalogsResult.rows,
-    schemas: schemasResult.rows,
-    tables: tablesResult.rows,
+    catalogs: catalogsRows,
+    schemas: schemasRows,
+    tables: tablesRows,
     summary: {
-      totalCatalogs: catalogsResult.rows.length,
-      totalSchemas: schemasResult.rows.length,
-      totalTables: tablesResult.rows.filter((r) => r.table_type === "MANAGED" || r.table_type === "EXTERNAL" || r.table_type === "BASE TABLE").length,
-      totalViews: tablesResult.rows.filter((r) => r.table_type === "VIEW").length,
+      totalCatalogs: catalogsRows.length,
+      totalSchemas: schemasRows.length,
+      totalTables: tablesRows.filter((r) => r.table_type === "MANAGED" || r.table_type === "EXTERNAL" || r.table_type === "BASE TABLE").length,
+      totalViews: tablesRows.filter((r) => r.table_type === "VIEW").length,
     },
   };
 }
@@ -156,14 +161,20 @@ export async function analyzeGlossary(config: DatabricksConfig) {
   const columnsWithComments = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, column_name, data_type, comment as column_description FROM system.information_schema.columns WHERE table_catalog = '${config.catalog}' AND comment IS NOT NULL`);
   const allColumns = await executeStatement(config, `SELECT COUNT(*) as total FROM system.information_schema.columns WHERE table_catalog = '${config.catalog}'`);
 
-  const totalTables = parseInt(allTables.rows[0]?.total ?? "0");
-  const totalColumns = parseInt(allColumns.rows[0]?.total ?? "0");
-  const documentedTables = tablesWithComments.rows.length;
-  const documentedColumns = columnsWithComments.rows.length;
+  // Ensure rows are arrays (defensive programming)
+  const tablesWithCommentsRows = tablesWithComments?.rows ?? [];
+  const allTablesRows = allTables?.rows ?? [];
+  const columnsWithCommentsRows = columnsWithComments?.rows ?? [];
+  const allColumnsRows = allColumns?.rows ?? [];
+
+  const totalTables = parseInt(allTablesRows[0]?.total ?? "0");
+  const totalColumns = parseInt(allColumnsRows[0]?.total ?? "0");
+  const documentedTables = tablesWithCommentsRows.length;
+  const documentedColumns = columnsWithCommentsRows.length;
 
   return {
-    tablesWithComments: tablesWithComments.rows,
-    columnsWithComments: columnsWithComments.rows,
+    tablesWithComments: tablesWithCommentsRows,
+    columnsWithComments: columnsWithCommentsRows,
     summary: {
       totalTables,
       documentedTables,
@@ -181,24 +192,28 @@ export async function analyzeTags(config: DatabricksConfig) {
   const tableTags = await executeStatement(config, `SELECT catalog_name, schema_name, table_name, tag_name, tag_value FROM system.information_schema.table_tags WHERE catalog_name = '${config.catalog}'`);
   const columnTags = await executeStatement(config, `SELECT catalog_name, schema_name, table_name, column_name, tag_name, tag_value FROM system.information_schema.column_tags WHERE catalog_name = '${config.catalog}'`);
 
+  // Ensure rows are arrays (defensive programming)
+  const tableTagsRows = tableTags?.rows ?? [];
+  const columnTagsRows = columnTags?.rows ?? [];
+
   // Aggregate tag distribution
   const tagDist: Record<string, number> = {};
-  [...tableTags.rows, ...columnTags.rows].forEach((r) => {
+  [...tableTagsRows, ...columnTagsRows].forEach((r) => {
     const tag = (r.tag_name ?? "unknown").toLowerCase();
     tagDist[tag] = (tagDist[tag] ?? 0) + 1;
   });
 
   // Count unique tables with tags
-  const tablesWithTags = new Set(tableTags.rows.map((r) => `${r.schema_name}.${r.table_name}`));
+  const tablesWithTags = new Set(tableTagsRows.map((r) => `${r.schema_name}.${r.table_name}`));
 
   const sensitiveKeywords = ["pii", "lgpd", "confidential", "confidencial", "sensitive", "sensivel", "restricted", "restrito"];
-  const sensitiveCount = [...tableTags.rows, ...columnTags.rows].filter((r) =>
+  const sensitiveCount = [...tableTagsRows, ...columnTagsRows].filter((r) =>
     sensitiveKeywords.some((k) => (r.tag_name ?? "").toLowerCase().includes(k))
   ).length;
 
   return {
-    tableTags: tableTags.rows,
-    columnTags: columnTags.rows,
+    tableTags: tableTagsRows,
+    columnTags: columnTagsRows,
     tagDistribution: Object.entries(tagDist).map(([name, count]) => ({ name, count })),
     summary: {
       totalTableTags: tableTags.rows.length,
@@ -217,31 +232,36 @@ export async function analyzeAccess(config: DatabricksConfig) {
   const catalogPrivs = await executeStatement(config, `SELECT grantor, grantee, catalog_name, privilege_type FROM system.information_schema.catalog_privileges WHERE catalog_name = '${config.catalog}'`);
   const schemaPrivs = await executeStatement(config, `SELECT grantor, grantee, catalog_name, schema_name, privilege_type FROM system.information_schema.schema_privileges WHERE catalog_name = '${config.catalog}'`);
 
+  // Ensure rows are arrays (defensive programming)
+  const tablePrivsRows = tablePrivs?.rows ?? [];
+  const catalogPrivsRows = catalogPrivs?.rows ?? [];
+  const schemaPrivsRows = schemaPrivs?.rows ?? [];
+
   // Privilege distribution
   const privDist: Record<string, number> = {};
-  [...tablePrivs.rows, ...catalogPrivs.rows, ...schemaPrivs.rows].forEach((r) => {
+  [...tablePrivsRows, ...catalogPrivsRows, ...schemaPrivsRows].forEach((r) => {
     const p = r.privilege_type ?? "UNKNOWN";
     privDist[p] = (privDist[p] ?? 0) + 1;
   });
 
   // Unique grantees
   const grantees = new Set([
-    ...tablePrivs.rows.map((r) => r.grantee),
-    ...catalogPrivs.rows.map((r) => r.grantee),
-    ...schemaPrivs.rows.map((r) => r.grantee),
+    ...tablePrivsRows.map((r) => r.grantee),
+    ...catalogPrivsRows.map((r) => r.grantee),
+    ...schemaPrivsRows.map((r) => r.grantee),
   ]);
 
   return {
-    tablePrivileges: tablePrivs.rows,
-    catalogPrivileges: catalogPrivs.rows,
-    schemaPrivileges: schemaPrivs.rows,
+    tablePrivileges: tablePrivsRows,
+    catalogPrivileges: catalogPrivsRows,
+    schemaPrivileges: schemaPrivsRows,
     privilegeDistribution: Object.entries(privDist).map(([name, count]) => ({ name, count })),
     summary: {
-      totalGrants: tablePrivs.rows.length + catalogPrivs.rows.length + schemaPrivs.rows.length,
+      totalGrants: tablePrivsRows.length + catalogPrivsRows.length + schemaPrivsRows.length,
       uniqueGrantees: grantees.size,
-      tableGrants: tablePrivs.rows.length,
-      catalogGrants: catalogPrivs.rows.length,
-      schemaGrants: schemaPrivs.rows.length,
+      tableGrants: tablePrivsRows.length,
+      catalogGrants: catalogPrivsRows.length,
+      schemaGrants: schemaPrivsRows.length,
     },
   };
 }
@@ -251,14 +271,17 @@ export async function analyzeAccess(config: DatabricksConfig) {
 export async function analyzeLineage(config: DatabricksConfig) {
   const lineage = await executeStatement(config, `SELECT source_table_catalog, source_table_schema, source_table_name, target_table_catalog, target_table_schema, target_table_name FROM system.access.table_lineage WHERE target_table_catalog = '${config.catalog}' OR source_table_catalog = '${config.catalog}' LIMIT 500`);
 
+  // Ensure rows are arrays (defensive programming)
+  const lineageRows = lineage?.rows ?? [];
+
   // Build adjacency for summary
-  const sourceSet = new Set(lineage.rows.map((r) => `${r.source_table_schema}.${r.source_table_name}`));
-  const targetSet = new Set(lineage.rows.map((r) => `${r.target_table_schema}.${r.target_table_name}`));
+  const sourceSet = new Set(lineageRows.map((r) => `${r.source_table_schema}.${r.source_table_name}`));
+  const targetSet = new Set(lineageRows.map((r) => `${r.target_table_schema}.${r.target_table_name}`));
 
   return {
-    lineageEdges: lineage.rows,
+    lineageEdges: lineageRows,
     summary: {
-      totalEdges: lineage.rows.length,
+      totalEdges: lineageRows.length,
       uniqueSources: sourceSet.size,
       uniqueTargets: targetSet.size,
     },
@@ -273,11 +296,15 @@ export async function analyzeSecurity(config: DatabricksConfig) {
   // DESCRIBE EXTENDED for tables with potential masks — sample up to 20 tables
   const tablesResult = await executeStatement(config, `SELECT table_schema, table_name FROM system.information_schema.tables WHERE table_catalog = '${config.catalog}' AND table_type = 'BASE TABLE' LIMIT 20`);
 
+  // Ensure rows are arrays (defensive programming)
+  const routinesRows = routines?.rows ?? [];
+  const tablesRows = tablesResult?.rows ?? [];
+
   const rowFilters: Array<{ table: string; definition: string }> = [];
   const columnMasks: Array<{ table: string; column: string; definition: string }> = [];
 
   // Parse routine definitions for masking patterns - expanded keywords
-  routines.rows.forEach((r) => {
+  routinesRows.forEach((r) => {
     const def = (r.routine_definition ?? "").toLowerCase();
     const name = (r.routine_name ?? "").toLowerCase();
     
@@ -327,14 +354,14 @@ export async function analyzeSecurity(config: DatabricksConfig) {
   });
 
   return {
-    maskingFunctions: routines.rows,
+    maskingFunctions: routinesRows,
     rowFilters,
     columnMasks,
     summary: {
-      totalFunctions: routines.rows.length,
+      totalFunctions: routinesRows.length,
       rowFilterCount: rowFilters.length,
       columnMaskCount: columnMasks.length,
-      tablesChecked: tablesResult.rows.length,
+      tablesChecked: tablesRows.length,
     },
   };
 }
