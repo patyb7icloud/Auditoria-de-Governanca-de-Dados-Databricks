@@ -21,7 +21,7 @@ interface StatementResult {
   };
 }
 
-async function executeStatement(
+export async function executeStatement(
   config: DatabricksConfig,
   sql: string,
   warehouseId?: string

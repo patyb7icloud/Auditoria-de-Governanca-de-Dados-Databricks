@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { getDb } from "./db";
 import { copilotKnowledgeBase, selfHealingKnowledgeBase, aiCostSavingsLog } from "../drizzle/schema";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -18,6 +18,9 @@ function normalizeQuestion(q: string): string {
  * Busca uma resposta no Knowledge Base persistente
  */
 export async function findInCopilotKnowledgeBase(tenantCatalog: string, question: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
   const normalized = normalizeQuestion(question);
   
   // Busca exata pela string normalizada (em produção, usar pgvector para busca semântica)
@@ -61,6 +64,9 @@ export async function saveToCopilotKnowledgeBase(data: {
   questionType: "structural" | "operational";
   answerPromptTemplate?: string;
 }) {
+  const db = await getDb();
+  if (!db) return;
+  
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24); // TTL de 24h por padrão para dados dinâmicos
   
@@ -82,6 +88,9 @@ export async function saveToCopilotKnowledgeBase(data: {
  * Busca sugestões do Self-Healing no Knowledge Base
  */
 export async function findInSelfHealingKnowledgeBase(tenantCatalog: string, schemaName: string, tableName: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
   const results = await db.select()
     .from(selfHealingKnowledgeBase)
     .where(
@@ -118,6 +127,9 @@ export async function saveToSelfHealingKnowledgeBase(data: {
   tableName: string;
   suggestions: any;
 }) {
+  const db = await getDb();
+  if (!db) return;
+  
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // Sugestões estruturais duram mais (7 dias)
   
@@ -134,6 +146,9 @@ export async function saveToSelfHealingKnowledgeBase(data: {
  * Registra a economia gerada para o painel de FinOps
  */
 async function logCostSavings(tenantCatalog: string, type: "copilot" | "self_healing", amountSaved: number) {
+  const db = await getDb();
+  if (!db) return;
+  
   const today = new Date().toISOString().split('T')[0];
   
   const existingLog = await db.select()
