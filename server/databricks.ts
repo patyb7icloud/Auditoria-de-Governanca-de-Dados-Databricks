@@ -142,7 +142,7 @@ export async function analyzeStructure(config: DatabricksConfig) {
     summary: {
       totalCatalogs: catalogsResult.rows.length,
       totalSchemas: schemasResult.rows.length,
-      totalTables: tablesResult.rows.filter((r) => r.table_type === "BASE TABLE").length,
+      totalTables: tablesResult.rows.filter((r) => r.table_type === "MANAGED" || r.table_type === "EXTERNAL" || r.table_type === "BASE TABLE").length,
       totalViews: tablesResult.rows.filter((r) => r.table_type === "VIEW").length,
     },
   };
