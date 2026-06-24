@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { LGPDCompliancePanel } from '@/components/LGPDCompliancePanel';
 import { GovernanceRecommendations } from '@/components/GovernanceRecommendations';
-import { Shield, AlertCircle, TrendingUp, RefreshCw, Loader, Sun, Moon, Globe } from 'lucide-react';
+import { Shield, AlertCircle, TrendingUp, RefreshCw, Loader, Sun, Moon, Globe, ArrowLeft } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { useLocation } from 'wouter';
@@ -159,6 +159,15 @@ export default function LGPDCompliance() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.history.back()}
+            className="mr-2"
+            title="Voltar"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <Shield className="h-8 w-8 text-blue-600" />
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -278,6 +287,7 @@ export default function LGPDCompliance() {
             auditLogsEnabled={complianceData.auditLogsEnabled}
             dsrReadiness={complianceData.dsrReadiness}
             recommendations={mockRecommendations.slice(0, 3)}
+            language={language}
           />
         </TabsContent>
 

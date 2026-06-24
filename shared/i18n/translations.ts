@@ -97,6 +97,135 @@ export const translations = {
       docAction: 'Abrir template de documentação LGPD',
     },
 
+    // Home Page
+    home: {
+      heroTag: 'Unity Catalog · Databricks',
+      heroTitle: 'Auditoria de Governança',
+      heroTitleHighlight: 'de Dados Databricks',
+      heroDesc: 'Ferramenta profissional para levantamento, mapeamento e análise de governança no Unity Catalog. Execute seis análises estruturadas e obtenha um score executivo de maturidade.',
+      startAudit: 'Iniciar Nova Auditoria',
+      viewHistory: 'Ver Histórico',
+      beginNow: 'Começar Agora',
+
+      analyses: {
+        structure: 'Mapeamento de Estrutura',
+        structureDesc: 'Catálogos, schemas e tabelas/views',
+        glossary: 'Glossário de Dados',
+        glossaryDesc: 'Comentários e cobertura de documentação',
+        tags: 'Classificação por Tags',
+        tagsDesc: 'PII, LGPD, confidencial e domínios',
+        access: 'Políticas de Acesso',
+        accessDesc: 'Grants por grantor, grantee e privilégio',
+        lineage: 'Linhagem de Dados',
+        lineageDesc: 'Origem e destino entre tabelas',
+        security: 'Segurança Dinâmica',
+        securityDesc: 'Row/Column Level Security e mascaramento',
+      },
+    },
+
+    // Dashboard Page
+    dashboard: {
+      auditTitle: 'Auditoria',
+      executiveTitle: 'Dashboard Executivo',
+      loadingResults: 'Carregando resultados...',
+      sessionNotFound: 'Sessão não encontrada',
+      completed: 'Concluída',
+      withErrors: 'Com erros',
+      catalog: 'Catálogo',
+      exportReport: 'Exportar Relatório',
+      downloadPdf: 'Baixar PDF',
+      score: 'Pontuação',
+      excellent: 'Excelente',
+      good: 'Bom',
+      fair: 'Regular',
+      critical: 'Crítico',
+      
+      // Score tabs
+      scoreDetail: 'Detalhe do Score',
+      analysisResults: 'Resultados das Análises',
+      recommendations: 'Recomendações',
+      gaps: 'Lacunas Identificadas',
+      viewFullReport: 'Ver Relatório Completo',
+
+      // Analysis types
+      structureAnalysis: 'Mapeamento de Estrutura',
+      glossaryAnalysis: 'Glossário de Dados',
+      tagsAnalysis: 'Classificação por Tags',
+      accessAnalysis: 'Políticas de Acesso',
+      lineageAnalysis: 'Linhagem de Dados',
+      securityAnalysis: 'Segurança Dinâmica',
+    },
+
+    // Connect Page
+    connect: {
+      title: 'Conectar ao Databricks',
+      subtitle: 'Configure sua conexão para executar a auditoria',
+      hostLabel: 'Host Databricks',
+      hostPlaceholder: 'https://dbc-xxxxx.cloud.databricks.com',
+      tokenLabel: 'Token de Autenticação',
+      tokenPlaceholder: 'dapi...',
+      catalogLabel: 'Catálogo Alvo',
+      catalogPlaceholder: 'Nome do catálogo',
+      testConnection: 'Testar Conexão',
+      startAudit: 'Iniciar Auditoria',
+      testing: 'Testando...',
+      connectionEstablished: 'Conexão estabelecida com sucesso!',
+      connectionFailed: 'Falha na conexão',
+      connectionSuccess: 'Conexão testada com sucesso',
+      fillAllFields: 'Preencha todos os campos antes de testar a conexão',
+      testBeforeStart: 'Teste a conexão antes de iniciar a auditoria',
+      auditStarting: 'Auditoria iniciada com sucesso!',
+      auditError: 'Erro ao executar auditoria',
+      connectionError: 'Erro ao testar conexão',
+
+      // Security note
+      securityNote: 'Sua segurança é nossa prioridade',
+      securityDesc: 'As credenciais são transmitidas de forma segura e nunca são armazenadas no navegador.',
+
+      // Steps
+      stepsTitle: 'Como funciona',
+      step1: 'Conecte seu workspace Databricks',
+      step2: 'Teste a conexão',
+      step3: 'Inicie a auditoria',
+      step4: 'Veja os resultados',
+    },
+
+    // History Page
+    history: {
+      title: 'Histórico de Auditorias',
+      subtitle: 'Acompanhe todas as auditorias executadas',
+      noAudits: 'Nenhuma auditoria encontrada',
+      startFirst: 'Comece uma nova auditoria para ver o histórico',
+      newAudit: 'Nova Auditoria',
+      
+      // Table headers
+      id: 'ID',
+      catalog: 'Catálogo',
+      host: 'Host',
+      date: 'Data',
+      score: 'Score',
+      status: 'Status',
+      actions: 'Ações',
+      
+      // Table content
+      excellent: 'Excelente',
+      good: 'Bom',
+      fair: 'Regular',
+      critical: 'Crítico',
+      completed: 'Concluída',
+      error: 'Erro',
+      
+      // Buttons
+      view: 'Visualizar',
+      delete: 'Excluir',
+      compare: 'Comparar',
+      
+      // Comparison
+      compareTitle: 'Comparar Auditorias',
+      selectTwo: 'Selecione duas auditorias para comparar',
+      comparison: 'Comparação',
+    },
+
     // Common
     common: {
       lightTheme: 'Tema Claro',
@@ -104,6 +233,17 @@ export const translations = {
       language: 'Idioma',
       portuguese: 'Português',
       english: 'English',
+      login: 'Entrar',
+      logout: 'Sair',
+      close: 'Fechar',
+      error: 'Erro',
+      success: 'Sucesso',
+      loading: 'Carregando...',
+      save: 'Salvar',
+      cancel: 'Cancelar',
+      delete: 'Excluir',
+      goHome: 'Ir para Home',
+      daysAgo: (days: number) => `${days} dias atrás`,
     },
   },
 
@@ -198,6 +338,135 @@ export const translations = {
       docAction: 'Open LGPD documentation template',
     },
 
+    // Home Page
+    home: {
+      heroTag: 'Unity Catalog · Databricks',
+      heroTitle: 'Governance Audit',
+      heroTitleHighlight: 'for Databricks Data',
+      heroDesc: 'Professional tool for surveying, mapping and analyzing governance in the Unity Catalog. Run six structured analyses and get an executive maturity score.',
+      startAudit: 'Start New Audit',
+      viewHistory: 'View History',
+      beginNow: 'Get Started',
+
+      analyses: {
+        structure: 'Structure Mapping',
+        structureDesc: 'Catalogs, schemas and tables/views',
+        glossary: 'Data Glossary',
+        glossaryDesc: 'Comments and documentation coverage',
+        tags: 'Classification by Tags',
+        tagsDesc: 'PII, LGPD, confidential and domains',
+        access: 'Access Policies',
+        accessDesc: 'Grants by grantor, grantee and privilege',
+        lineage: 'Data Lineage',
+        lineageDesc: 'Source and destination between tables',
+        security: 'Dynamic Security',
+        securityDesc: 'Row/Column Level Security and masking',
+      },
+    },
+
+    // Dashboard Page
+    dashboard: {
+      auditTitle: 'Audit',
+      executiveTitle: 'Executive Dashboard',
+      loadingResults: 'Loading results...',
+      sessionNotFound: 'Session not found',
+      completed: 'Completed',
+      withErrors: 'With errors',
+      catalog: 'Catalog',
+      exportReport: 'Export Report',
+      downloadPdf: 'Download PDF',
+      score: 'Score',
+      excellent: 'Excellent',
+      good: 'Good',
+      fair: 'Fair',
+      critical: 'Critical',
+      
+      // Score tabs
+      scoreDetail: 'Score Detail',
+      analysisResults: 'Analysis Results',
+      recommendations: 'Recommendations',
+      gaps: 'Identified Gaps',
+      viewFullReport: 'View Full Report',
+
+      // Analysis types
+      structureAnalysis: 'Structure Mapping',
+      glossaryAnalysis: 'Data Glossary',
+      tagsAnalysis: 'Classification by Tags',
+      accessAnalysis: 'Access Policies',
+      lineageAnalysis: 'Data Lineage',
+      securityAnalysis: 'Dynamic Security',
+    },
+
+    // Connect Page
+    connect: {
+      title: 'Connect to Databricks',
+      subtitle: 'Configure your connection to run the audit',
+      hostLabel: 'Databricks Host',
+      hostPlaceholder: 'https://dbc-xxxxx.cloud.databricks.com',
+      tokenLabel: 'Authentication Token',
+      tokenPlaceholder: 'dapi...',
+      catalogLabel: 'Target Catalog',
+      catalogPlaceholder: 'Catalog name',
+      testConnection: 'Test Connection',
+      startAudit: 'Start Audit',
+      testing: 'Testing...',
+      connectionEstablished: 'Connection established successfully!',
+      connectionFailed: 'Connection failed',
+      connectionSuccess: 'Connection tested successfully',
+      fillAllFields: 'Fill all fields before testing the connection',
+      testBeforeStart: 'Test the connection before starting the audit',
+      auditStarting: 'Audit started successfully!',
+      auditError: 'Error starting audit',
+      connectionError: 'Error testing connection',
+
+      // Security note
+      securityNote: 'Your security is our priority',
+      securityDesc: 'Credentials are transmitted securely and never stored in the browser.',
+
+      // Steps
+      stepsTitle: 'How it works',
+      step1: 'Connect your Databricks workspace',
+      step2: 'Test the connection',
+      step3: 'Start the audit',
+      step4: 'View the results',
+    },
+
+    // History Page
+    history: {
+      title: 'Audit History',
+      subtitle: 'Track all audits executed',
+      noAudits: 'No audits found',
+      startFirst: 'Start a new audit to see the history',
+      newAudit: 'New Audit',
+      
+      // Table headers
+      id: 'ID',
+      catalog: 'Catalog',
+      host: 'Host',
+      date: 'Date',
+      score: 'Score',
+      status: 'Status',
+      actions: 'Actions',
+      
+      // Table content
+      excellent: 'Excellent',
+      good: 'Good',
+      fair: 'Fair',
+      critical: 'Critical',
+      completed: 'Completed',
+      error: 'Error',
+      
+      // Buttons
+      view: 'View',
+      delete: 'Delete',
+      compare: 'Compare',
+      
+      // Comparison
+      compareTitle: 'Compare Audits',
+      selectTwo: 'Select two audits to compare',
+      comparison: 'Comparison',
+    },
+
     // Common
     common: {
       lightTheme: 'Light Theme',
@@ -205,6 +474,17 @@ export const translations = {
       language: 'Language',
       portuguese: 'Português',
       english: 'English',
+      login: 'Login',
+      logout: 'Logout',
+      close: 'Close',
+      error: 'Error',
+      success: 'Success',
+      loading: 'Loading...',
+      save: 'Save',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      goHome: 'Go Home',
+      daysAgo: (days: number) => `${days} days ago`,
     },
   },
 };

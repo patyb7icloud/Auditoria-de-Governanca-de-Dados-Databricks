@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle, Clock, Lock, FileText, Users } from 'lucide-r
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import type { Language } from '@shared/i18n/translations';
+import { getTranslation } from '@shared/i18n/translations';
 
 interface LGPDCompliancePanelProps {
   score: number;
@@ -21,6 +23,7 @@ interface LGPDCompliancePanelProps {
     priority: 'critical' | 'high' | 'medium';
     action: string;
   }>;
+  language?: Language;
 }
 
 export function LGPDCompliancePanel({
@@ -33,7 +36,10 @@ export function LGPDCompliancePanel({
   auditLogsEnabled,
   dsrReadiness,
   recommendations,
+  language = 'pt',
 }: LGPDCompliancePanelProps) {
+  const t = getTranslation(language);
+
   // Provide safe defaults for dsrReadiness if undefined
   const safeDsrReadiness = dsrReadiness || {
     export: false,
@@ -43,6 +49,7 @@ export function LGPDCompliancePanel({
 
   // Provide safe defaults for recommendations if undefined
   const safeRecommendations = recommendations || [];
+
   const getRiskColor = (level: string) => {
     switch (level) {
       case 'critical':
@@ -73,6 +80,27 @@ export function LGPDCompliancePanel({
     }
   };
 
+  const dsrLabels = {
+    export: language === 'pt' ? 'Direito de Exportação' : 'Right to Export',
+    delete: language === 'pt' ? 'Direito de Exclusão' : 'Right to Delete',
+    access: language === 'pt' ? 'Direito de Acesso' : 'Right to Access',
+  };
+
+  const dsrStatusLabels = {
+    implemented: language === 'pt' ? 'Implementado' : 'Implemented',
+    notReady: language === 'pt' ? 'Não Pronto' : 'Not Ready',
+  };
+
+  const checklistItems = [
+    { label: language === 'pt' ? 'Identificação e Etiquetagem de PII' : 'PII Identification & Tagging', done: piiColumnsUntagged === 0 },
+    { label: language === 'pt' ? 'Políticas de Retenção de Dados' : 'Data Retention Policies', done: retentionPolicies > 0 },
+    { label: language === 'pt' ? 'Criptografia em Repouso' : 'Encryption at Rest', done: encryptedTables > 0 },
+    { label: language === 'pt' ? 'Logs de Auditoria Habilitados' : 'Audit Logging Enabled', done: auditLogsEnabled },
+    { label: language === 'pt' ? 'Exportação de Dados Pronta (DSR)' : 'Data Export Ready (DSR)', done: safeDsrReadiness.export },
+    { label: language === 'pt' ? 'Exclusão de Dados Pronta (DSR)' : 'Data Deletion Ready (DSR)', done: safeDsrReadiness.delete },
+    { label: language === 'pt' ? 'Trilha de Auditoria de Controle de Acesso' : 'Access Control Audit Trail', done: safeDsrReadiness.access },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Compliance Score Card */}
@@ -80,10 +108,13 @@ export function LGPDCompliancePanel({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              LGPD/GDPR Compliance Score
+              LGPD/GDPR {language === 'pt' ? 'Score de Conformidade' : 'Compliance Score'}
             </h3>
             <p className="text-sm text-gray-600">
-              Overall data protection and governance maturity
+              {language === 'pt' 
+                ? 'Maturidade geral de proteção de dados e governança'
+                : 'Overall data protection and governance maturity'
+              }
             </p>
           </div>
           <div className={`text-center p-4 rounded-lg ${getRiskBgColor(riskLevel)}`}>
@@ -91,7 +122,7 @@ export function LGPDCompliancePanel({
               {score}
             </div>
             <div className={`text-xs font-semibold uppercase ${getRiskColor(riskLevel)}`}>
-              {riskLevel} Risk
+              {language === 'pt' ? 'Risco' : 'Risk'} {riskLevel.toUpperCase()}
             </div>
           </div>
         </div>
@@ -102,8 +133,7 @@ export function LGPDCompliancePanel({
         <Alert className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
-            <strong>{criticalIssues} Critical Issues Found</strong> — Immediate action required
-            for LGPD compliance.
+            <strong>{criticalIssues} {language === 'pt' ? 'Problemas Críticos Encontrados' : 'Critical Issues Found'}</strong> — {language === 'pt' ? 'Ação imediata necessária para conformidade LGPD' : 'Immediate action required for LGPD compliance'}.
           </AlertDescription>
         </Alert>
       )}
@@ -113,7 +143,7 @@ export function LGPDCompliancePanel({
         {/* PII Protection */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-gray-900">PII Detection</h4>
+            <h4 className="font-semibold text-gray-900">{language === 'pt' ? 'Detecção de PII' : 'PII Detection'}</h4>
             <AlertCircle className="h-5 w-5 text-orange-500" />
           </div>
           <div className="space-y-2">
@@ -121,11 +151,11 @@ export function LGPDCompliancePanel({
               <p className="text-2xl font-bold text-gray-900">
                 {piiColumnsUntagged}
               </p>
-              <p className="text-xs text-gray-600">Untagged PII columns</p>
+              <p className="text-xs text-gray-600">{language === 'pt' ? 'Colunas PII sem etiqueta' : 'Untagged PII columns'}</p>
             </div>
             {piiColumnsUntagged > 0 && (
               <Badge variant="destructive" className="w-full justify-center">
-                Action Required
+                {language === 'pt' ? 'Ação Requerida' : 'Action Required'}
               </Badge>
             )}
           </div>
@@ -134,7 +164,7 @@ export function LGPDCompliancePanel({
         {/* Data Retention */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-gray-900">Retention Policy</h4>
+            <h4 className="font-semibold text-gray-900">{language === 'pt' ? 'Política de Retenção' : 'Retention Policy'}</h4>
             <Clock className="h-5 w-5 text-blue-500" />
           </div>
           <div className="space-y-2">
@@ -142,11 +172,11 @@ export function LGPDCompliancePanel({
               <p className="text-2xl font-bold text-gray-900">
                 {retentionPolicies}
               </p>
-              <p className="text-xs text-gray-600">Policies defined</p>
+              <p className="text-xs text-gray-600">{language === 'pt' ? 'Políticas definidas' : 'Policies defined'}</p>
             </div>
             {retentionPolicies === 0 && (
               <Badge variant="outline" className="w-full justify-center">
-                Not Configured
+                {language === 'pt' ? 'Não Configurado' : 'Not Configured'}
               </Badge>
             )}
           </div>
@@ -155,7 +185,7 @@ export function LGPDCompliancePanel({
         {/* Encryption */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-gray-900">Encryption</h4>
+            <h4 className="font-semibold text-gray-900">{language === 'pt' ? 'Criptografia' : 'Encryption'}</h4>
             <Lock className="h-5 w-5 text-green-500" />
           </div>
           <div className="space-y-2">
@@ -163,11 +193,11 @@ export function LGPDCompliancePanel({
               <p className="text-2xl font-bold text-gray-900">
                 {encryptedTables}
               </p>
-              <p className="text-xs text-gray-600">Tables encrypted</p>
+              <p className="text-xs text-gray-600">{language === 'pt' ? 'Tabelas criptografadas' : 'Tables encrypted'}</p>
             </div>
             {encryptedTables > 0 && (
               <Badge variant="outline" className="w-full justify-center bg-green-50">
-                Enabled
+                {language === 'pt' ? 'Habilitado' : 'Enabled'}
               </Badge>
             )}
           </div>
@@ -176,7 +206,7 @@ export function LGPDCompliancePanel({
         {/* Audit Logs */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-gray-900">Audit Logs</h4>
+            <h4 className="font-semibold text-gray-900">{language === 'pt' ? 'Logs de Auditoria' : 'Audit Logs'}</h4>
             <FileText className="h-5 w-5 text-purple-500" />
           </div>
           <div className="space-y-2">
@@ -184,13 +214,13 @@ export function LGPDCompliancePanel({
               <p className="text-2xl font-bold text-gray-900">
                 {auditLogsEnabled ? 'ON' : 'OFF'}
               </p>
-              <p className="text-xs text-gray-600">Access logging</p>
+              <p className="text-xs text-gray-600">{language === 'pt' ? 'Registro de acesso' : 'Access logging'}</p>
             </div>
             <Badge
               variant={auditLogsEnabled ? 'default' : 'outline'}
               className="w-full justify-center"
             >
-              {auditLogsEnabled ? 'Active' : 'Disabled'}
+              {auditLogsEnabled ? (language === 'pt' ? 'Ativo' : 'Active') : (language === 'pt' ? 'Desabilitado' : 'Disabled')}
             </Badge>
           </div>
         </Card>
@@ -201,7 +231,7 @@ export function LGPDCompliancePanel({
         <div className="flex items-center gap-2 mb-4">
           <Users className="h-5 w-5 text-blue-600" />
           <h4 className="font-semibold text-gray-900">
-            Data Subject Rights Readiness
+            {language === 'pt' ? 'Prontidão dos Direitos do Titular' : 'Data Subject Rights Readiness'}
           </h4>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -221,13 +251,13 @@ export function LGPDCompliancePanel({
                   <AlertCircle className="h-4 w-4 text-gray-400" />
                 )}
                 <p className="text-sm font-semibold text-gray-900 capitalize">
-                  Right to {right}
+                  {dsrLabels[right as keyof typeof dsrLabels]}
                 </p>
               </div>
               <p className="text-xs text-gray-600">
                 {safeDsrReadiness[right as keyof typeof safeDsrReadiness]
-                  ? 'Implemented'
-                  : 'Not Ready'}
+                  ? dsrStatusLabels.implemented
+                  : dsrStatusLabels.notReady}
               </p>
             </div>
           ))}
@@ -238,7 +268,7 @@ export function LGPDCompliancePanel({
       {safeRecommendations.length > 0 && (
         <Card className="p-6">
           <h4 className="font-semibold text-gray-900 mb-4">
-            Compliance Recommendations
+            {language === 'pt' ? 'Recomendações de Conformidade' : 'Compliance Recommendations'}
           </h4>
           <div className="space-y-3">
             {safeRecommendations.map((rec, idx) => (
@@ -275,18 +305,10 @@ export function LGPDCompliancePanel({
       {/* Compliance Checklist */}
       <Card className="p-6">
         <h4 className="font-semibold text-gray-900 mb-4">
-          LGPD Compliance Checklist
+          {language === 'pt' ? 'Checklist de Conformidade LGPD' : 'LGPD Compliance Checklist'}
         </h4>
         <div className="space-y-2">
-          {[
-            { label: 'PII Identification & Tagging', done: piiColumnsUntagged === 0 },
-            { label: 'Data Retention Policies', done: retentionPolicies > 0 },
-            { label: 'Encryption at Rest', done: encryptedTables > 0 },
-            { label: 'Audit Logging Enabled', done: auditLogsEnabled },
-            { label: 'Data Export Ready (DSR)', done: safeDsrReadiness.export },
-            { label: 'Data Deletion Ready (DSR)', done: safeDsrReadiness.delete },
-            { label: 'Access Control Audit Trail', done: safeDsrReadiness.access },
-          ].map((item, idx) => (
+          {checklistItems.map((item, idx) => (
             <div key={idx} className="flex items-center gap-3 p-2">
               {item.done ? (
                 <CheckCircle className="h-5 w-5 text-green-600" />

@@ -2,6 +2,8 @@ import AppLayout from "@/components/AppLayout";
 import LineageGraph, { type LineageEdge } from "@/components/LineageGraph";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation, Link } from "wouter";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getTranslation } from "@shared/i18n/translations";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -50,17 +52,28 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
-function ScoreLabel({ score }: { score: number }) {
-  if (score >= 80) return <span className="text-success font-semibold">Excelente</span>;
-  if (score >= 60) return <span className="text-warning font-semibold">Bom</span>;
-  if (score >= 40) return <span className="text-orange-400 font-semibold">Regular</span>;
-  return <span className="text-destructive font-semibold">Crítico</span>;
+function ScoreLabel({ score, language }: { score: number; language: 'pt' | 'en' }) {
+  if (score >= 80) return <span className="text-success font-semibold">{language === 'pt' ? 'Excelente' : 'Excellent'}</span>;
+  if (score >= 60) return <span className="text-warning font-semibold">{language === 'pt' ? 'Bom' : 'Good'}</span>;
+  if (score >= 40) return <span className="text-orange-400 font-semibold">{language === 'pt' ? 'Regular' : 'Fair'}</span>;
+  return <span className="text-destructive font-semibold">{language === 'pt' ? 'Crítico' : 'Critical'}</span>;
 }
 
 export default function Dashboard() {
   const params = useParams<{ sessionId: string }>();
   const [, navigate] = useLocation();
+  const { language } = useLanguage();
+  const t = getTranslation(language);
   const sessionId = parseInt(params.sessionId ?? "0");
+
+  const ANALYSIS_META = [
+    { type: "structure", label: t.dashboard.structureAnalysis, icon: Database, color: "text-info" },
+    { type: "glossary", label: t.dashboard.glossaryAnalysis, icon: FileText, color: "text-success" },
+    { type: "tags", label: t.dashboard.tagsAnalysis, icon: Tag, color: "text-warning" },
+    { type: "access", label: t.dashboard.accessAnalysis, icon: Lock, color: "text-gold" },
+    { type: "lineage", label: t.dashboard.lineageAnalysis, icon: GitBranch, color: "text-info" },
+    { type: "security", label: t.dashboard.securityAnalysis, icon: Eye, color: "text-success" },
+  ];
 
   const queryKey = { sessionId };
   const hook = import.meta.env.DEV ? trpc.databricks.getSessionPublic : trpc.databricks.getSession;
@@ -72,7 +85,7 @@ export default function Dashboard() {
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-            <p className="text-muted-foreground">Carregando resultados...</p>
+            <p className="text-muted-foreground">{language === 'pt' ? 'Carregando resultados...' : 'Loading results...'}</p>
           </div>
         </div>
       </AppLayout>
@@ -85,8 +98,8 @@ export default function Dashboard() {
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center space-y-4">
             <XCircle className="w-12 h-12 text-destructive mx-auto" />
-            <p className="text-foreground font-semibold">Sessão não encontrada</p>
-            <Button asChild variant="outline"><Link href="/history">Ver Histórico</Link></Button>
+            <p className="text-foreground font-semibold">{language === 'pt' ? 'Sessão não encontrada' : 'Session not found'}</p>
+            <Button asChild variant="outline"><Link href="/history">{t.home.viewHistory}</Link></Button>
           </div>
         </div>
       </AppLayout>
