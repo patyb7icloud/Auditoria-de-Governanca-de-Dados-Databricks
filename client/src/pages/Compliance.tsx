@@ -5,22 +5,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { LGPDCompliancePanel } from '@/components/LGPDCompliancePanel';
 import { GovernanceRecommendations } from '@/components/GovernanceRecommendations';
-import { Shield, AlertCircle, TrendingUp, RefreshCw, Loader, Sun, Moon } from 'lucide-react';
+import { Shield, AlertCircle, TrendingUp, RefreshCw, Loader, Sun, Moon, Globe } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { useLocation } from 'wouter';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getTranslation } from '@shared/i18n/translations';
 
 /**
  * Página dedicada para Compliance LGPD
  * Exibe análise completa, recomendações e status de conformidade
  * Integrada com dados reais do Databricks via tRPC
+ * Suporte a i18n (Português e Inglês)
  */
 export default function LGPDCompliance() {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { language, setLanguage } = useLanguage();
   const [location] = useLocation();
   const [activeTab, setActiveTab] = useState('overview');
+
+  const t = getTranslation(language);
 
   // Extract sessionId from URL if available
   const sessionId = location.split('/').pop();
@@ -51,7 +57,7 @@ export default function LGPDCompliance() {
   // Trigger analysis on mount or when config changes
   const handleAnalyze = async () => {
     if (!databricksConfig) {
-      alert('Configuração do Databricks não encontrada. Configure em Nova Auditoria primeiro.');
+      alert(t.compliance.configNotFound);
       return;
     }
     
@@ -87,75 +93,64 @@ export default function LGPDCompliance() {
       id: 'pii-tagging',
       priority: 'critical' as const,
       category: 'pii' as const,
-      title: 'Aplicar Tags PII em 5 Colunas',
-      description:
-        'Detectadas 5 colunas contendo PII não etiquetadas (email, cpf, data_nascimento).',
-      impact: 'Melhora score de compliance em 20%',
+      title: t.recommendations.piiTagging,
+      description: t.recommendations.piiDescription,
+      impact: t.recommendations.piiImpact,
       estimatedEffort: 'quick' as const,
-      action: 'Abrir wizard de etiquetagem automática',
+      action: t.recommendations.piiAction,
       relatedAssets: ['customers.email', 'customers.cpf', 'orders.birth_date'],
     },
     {
       id: 'retention-policies',
       priority: 'critical' as const,
       category: 'retention' as const,
-      title: 'Definir Políticas de Retenção',
-      description:
-        'Nenhuma política de retenção foi definida para conformidade LGPD.',
-      impact: 'Melhora score de compliance em 25%',
+      title: t.recommendations.retentionPolicies,
+      description: t.recommendations.retentionDescription,
+      impact: t.recommendations.retentionImpact,
       estimatedEffort: 'medium' as const,
-      action: 'Criar políticas de retenção por tabela',
-      relatedAssets: [
-        'customers',
-        'orders',
-        'transactions',
-        'logs',
-      ],
+      action: t.recommendations.retentionAction,
+      relatedAssets: ['customers', 'orders', 'transactions', 'logs'],
     },
     {
       id: 'audit-logs',
       priority: 'high' as const,
       category: 'audit' as const,
-      title: 'Habilitar Logs de Acesso',
-      description:
-        'Logs de acesso não estão habilitados. Necessários para auditoria LGPD.',
-      impact: 'Melhora score de compliance em 15%',
+      title: t.recommendations.auditLogs,
+      description: t.recommendations.auditDescription,
+      impact: t.recommendations.auditImpact,
       estimatedEffort: 'quick' as const,
-      action: 'Habilitar nas configurações do workspace',
+      action: t.recommendations.auditAction,
     },
     {
       id: 'encryption',
       priority: 'high' as const,
       category: 'encryption' as const,
-      title: 'Habilitar Criptografia em 18 Tabelas',
-      description:
-        'Apenas 2 de 20 tabelas estão criptografadas. Tabelas com PII devem ser criptografadas.',
-      impact: 'Melhora score de compliance em 15%',
+      title: t.recommendations.encryption,
+      description: t.recommendations.encryptionDescription,
+      impact: t.recommendations.encryptionImpact,
       estimatedEffort: 'complex' as const,
-      action: 'Configurar criptografia em repouso',
+      action: t.recommendations.encryptionAction,
       relatedAssets: ['customers', 'orders', 'payments', 'users'],
     },
     {
       id: 'dsr-workflow',
       priority: 'high' as const,
       category: 'access' as const,
-      title: 'Implementar Workflow de DSR',
-      description:
-        'Direitos do titular dos dados (acesso, exportação, exclusão) não estão automatizados.',
-      impact: 'Melhora score de compliance em 20%',
+      title: t.recommendations.dsrWorkflow,
+      description: t.recommendations.dsrDescription,
+      impact: t.recommendations.dsrImpact,
       estimatedEffort: 'complex' as const,
-      action: 'Criar workflow de Data Subject Request',
+      action: t.recommendations.dsrAction,
     },
     {
       id: 'documentation',
       priority: 'medium' as const,
       category: 'documentation' as const,
-      title: 'Documentar Finalidade de Processamento',
-      description:
-        'Faltam documentações sobre finalidade, base legal e tempo de retenção para várias tabelas.',
-      impact: 'Melhora auditabilidade em 10%',
+      title: t.recommendations.documentation,
+      description: t.recommendations.docDescription,
+      impact: t.recommendations.docImpact,
       estimatedEffort: 'medium' as const,
-      action: 'Abrir template de documentação LGPD',
+      action: t.recommendations.docAction,
     },
   ];
 
@@ -167,40 +162,59 @@ export default function LGPDCompliance() {
           <Shield className="h-8 w-8 text-blue-600" />
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Compliance LGPD/GDPR
+              {t.compliance.title}
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Análise de conformidade com Lei Geral de Proteção de Dados
+              {t.compliance.subtitle}
             </p>
           </div>
         </div>
         <div className="text-right space-y-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleTheme}
-            className="w-full justify-center"
-            title={`Mudar para tema ${theme === 'dark' ? 'claro' : 'escuro'}`}
-          >
-            {theme === 'dark' ? (
-              <>
-                <Sun className="h-4 w-4 mr-2" />
-                Tema Claro
-              </>
-            ) : (
-              <>
-                <Moon className="h-4 w-4 mr-2" />
-                Tema Escuro
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleTheme}
+              title={`Mudar para tema ${theme === 'dark' ? t.common.lightTheme : t.common.darkTheme}`}
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="h-4 w-4 mr-2" />
+                  {t.common.lightTheme}
+                </>
+              ) : (
+                <>
+                  <Moon className="h-4 w-4 mr-2" />
+                  {t.common.darkTheme}
+                </>
+              )}
+            </Button>
+            <div className="flex gap-1 p-1 bg-gray-200 dark:bg-gray-700 rounded-md">
+              <Button
+                variant={language === 'pt' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setLanguage('pt')}
+                className="text-xs"
+              >
+                PT
+              </Button>
+              <Button
+                variant={language === 'en' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setLanguage('en')}
+                className="text-xs"
+              >
+                EN
+              </Button>
+            </div>
+          </div>
           <div>
             <div className="text-4xl font-bold text-gray-900 dark:text-white">
               {complianceData.score}
-              <span className="text-lg text-gray-600">/100</span>
+              <span className="text-lg text-gray-600">{t.compliance.score}</span>
             </div>
             <div className="text-sm font-semibold text-orange-600">
-              RISCO {complianceData.riskLevel ? complianceData.riskLevel.toUpperCase() : 'DESCONHECIDO'}
+              {t.compliance.risk.toUpperCase()} {complianceData.riskLevel ? complianceData.riskLevel.toUpperCase() : 'DESCONHECIDO'}
             </div>
           </div>
           <Button 
@@ -211,12 +225,12 @@ export default function LGPDCompliance() {
             {isLoadingAnalysis ? (
               <>
                 <Loader className="mr-2 h-4 w-4 animate-spin" />
-                Analisando...
+                {t.compliance.analyzing}
               </>
             ) : (
               <>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Analisar Agora
+                {t.compliance.analyzeNow}
               </>
             )}
           </Button>
@@ -228,8 +242,7 @@ export default function LGPDCompliance() {
         <Alert className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
-            <strong>{complianceData.criticalIssues} problemas críticos</strong> identificados.
-            Ação imediata recomendada para manter conformidade LGPD.
+            <strong>{complianceData.criticalIssues} {t.compliance.criticalIssues}</strong> {t.compliance.criticalIssuesDesc}
           </AlertDescription>
         </Alert>
       )}
@@ -237,9 +250,9 @@ export default function LGPDCompliance() {
       {/* Tabs */}
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="overview">{t.compliance.tabs.overview}</TabsTrigger>
           <TabsTrigger value="recommendations">
-            Recomendações
+            {t.compliance.tabs.recommendations}
             {mockRecommendations.length > 0 && (
               <span className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
                 {
@@ -249,8 +262,8 @@ export default function LGPDCompliance() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="pii">Dados Pessoais</TabsTrigger>
-          <TabsTrigger value="progress">Progresso</TabsTrigger>
+          <TabsTrigger value="pii">{t.compliance.tabs.pii}</TabsTrigger>
+          <TabsTrigger value="progress">{t.compliance.tabs.progress}</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -274,13 +287,11 @@ export default function LGPDCompliance() {
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">
-                Plano de Ação Prioritizado
+                {t.compliance.actionPlan}
               </h2>
             </div>
             <p className="text-sm text-gray-600 mb-6">
-              {mockRecommendations.length} recomendações baseadas em análise de
-              conformidade. Priorize as ações críticas para melhorar rapidamente
-              o score de compliance.
+              {mockRecommendations.length} {t.compliance.recommendationsCount}
             </p>
             <GovernanceRecommendations
               recommendations={mockRecommendations}
@@ -295,40 +306,40 @@ export default function LGPDCompliance() {
         <TabsContent value="pii" className="space-y-4">
           <Card className="p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Dados Pessoais Identificáveis (PII)
+              {t.compliance.piiTitle}
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <Card className="p-4 bg-blue-50">
-                <p className="text-sm text-gray-600 mb-1">Total de Colunas</p>
+                <p className="text-sm text-gray-600 mb-1">{t.compliance.totalColumns}</p>
                 <p className="text-3xl font-bold text-blue-600">128</p>
               </Card>
               <Card className="p-4 bg-orange-50">
-                <p className="text-sm text-gray-600 mb-1">PII Identificado</p>
+                <p className="text-sm text-gray-600 mb-1">{t.compliance.piiIdentified}</p>
                 <p className="text-3xl font-bold text-orange-600">18</p>
               </Card>
               <Card className="p-4 bg-red-50">
-                <p className="text-sm text-gray-600 mb-1">Não Etiquetado</p>
+                <p className="text-sm text-gray-600 mb-1">{t.compliance.notTagged}</p>
                 <p className="text-3xl font-bold text-red-600">5</p>
               </Card>
             </div>
 
             <div className="space-y-3">
               <h3 className="font-semibold text-gray-900">
-                Categorias Detectadas:
+                {t.compliance.categoriesDetected}
               </h3>
               {[
-                { name: 'Email', count: 3, tagged: 3 },
-                { name: 'CPF', count: 2, tagged: 0 },
-                { name: 'Data de Nascimento', count: 4, tagged: 4 },
-                { name: 'Telefone', count: 5, tagged: 5 },
-                { name: 'Endereço', count: 4, tagged: 1 },
+                { name: t.compliance.piiCategories.email, count: 3, tagged: 3 },
+                { name: t.compliance.piiCategories.cpf, count: 2, tagged: 0 },
+                { name: t.compliance.piiCategories.birthDate, count: 4, tagged: 4 },
+                { name: t.compliance.piiCategories.phone, count: 5, tagged: 5 },
+                { name: t.compliance.piiCategories.address, count: 4, tagged: 1 },
               ].map((cat) => (
                 <div key={cat.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-900">{cat.name}</p>
                     <p className="text-sm text-gray-600">
-                      {cat.tagged}/{cat.count} etiquetados
+                      {cat.tagged}/{cat.count} {t.compliance.tagged}
                     </p>
                   </div>
                   <div className="w-24 bg-gray-200 rounded-full h-2">
@@ -348,14 +359,14 @@ export default function LGPDCompliance() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="p-6">
               <h3 className="font-semibold text-gray-900 mb-4">
-                Histórico de Score
+                {t.compliance.scoreHistory}
               </h3>
               <div className="space-y-2">
                 {[
-                  { date: 'Hoje', score: 45 },
-                  { date: '-7 dias', score: 40 },
-                  { date: '-14 dias', score: 35 },
-                  { date: '-30 dias', score: 30 },
+                  { date: t.compliance.today, score: 45 },
+                  { date: t.compliance.daysAgo(7), score: 40 },
+                  { date: t.compliance.daysAgo(14), score: 35 },
+                  { date: t.compliance.daysAgo(30), score: 30 },
                 ].map((entry) => (
                   <div key={entry.date} className="flex justify-between items-center">
                     <p className="text-sm text-gray-600">{entry.date}</p>
@@ -377,17 +388,11 @@ export default function LGPDCompliance() {
 
             <Card className="p-6">
               <h3 className="font-semibold text-gray-900 mb-4">
-                Próximos Passos
+                {t.compliance.nextSteps}
               </h3>
               <div className="space-y-2">
-                {[
-                  '1️⃣ Aplicar tags PII (5 min)',
-                  '2️⃣ Habilitar audit logs (3 min)',
-                  '3️⃣ Definir políticas de retenção (30 min)',
-                  '4️⃣ Configurar criptografia (1 hour)',
-                  '5️⃣ Implementar workflow DSR (2 hours)',
-                ].map((step) => (
-                  <div key={step} className="flex items-center gap-2">
+                {t.compliance.steps.map((step, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-gray-400" />
                     <p className="text-sm text-gray-600">{step}</p>
                   </div>
@@ -397,9 +402,9 @@ export default function LGPDCompliance() {
           </div>
 
           <Card className="p-6 bg-green-50 border-green-200">
-            <h3 className="font-semibold text-green-900 mb-2">Meta</h3>
+            <h3 className="font-semibold text-green-900 mb-2">{t.compliance.goal}</h3>
             <p className="text-sm text-green-800 mb-3">
-              Atingir score de 80/100 em 30 dias para conformidade plena.
+              {t.compliance.goalDesc}
             </p>
             <div className="w-full bg-green-200 rounded-full h-3">
               <div className="bg-green-600 h-3 rounded-full" style={{ width: '45%' }} />

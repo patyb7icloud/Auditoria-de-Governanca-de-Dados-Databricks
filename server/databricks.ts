@@ -272,13 +272,52 @@ export async function analyzeSecurity(config: DatabricksConfig) {
   const rowFilters: Array<{ table: string; definition: string }> = [];
   const columnMasks: Array<{ table: string; column: string; definition: string }> = [];
 
-  // Parse routine definitions for masking patterns
+  // Parse routine definitions for masking patterns - expanded keywords
   routines.rows.forEach((r) => {
     const def = (r.routine_definition ?? "").toLowerCase();
-    if (def.includes("mask") || def.includes("filter") || def.includes("rls") || def.includes("row_filter")) {
+    const name = (r.routine_name ?? "").toLowerCase();
+    
+    // ABAC Pattern Detection: Functions specifically designed for security policies
+    // Row-level security patterns
+    if (
+      // Explicit keywords in definition or name
+      def.includes("mask") || 
+      def.includes("filter") || 
+      def.includes("rls") || 
+      def.includes("row_filter") ||
+      def.includes("row_level") ||
+      def.includes("sensitive") ||
+      name.includes("mask") ||
+      name.includes("filter") ||
+      name.includes("rls") ||
+      name.includes("security") ||
+      // ABAC Pattern: Common naming conventions for row filter functions
+      name.includes("filtrar") ||
+      name.includes("filter_") ||
+      name.includes("_filter") ||
+      (def.includes("=") && def.includes("where")) // Simple WHERE condition pattern
+    ) {
       rowFilters.push({ table: r.routine_name ?? "", definition: r.routine_definition ?? "" });
     }
-    if (def.includes("column_mask") || def.includes("mask_value") || def.includes("sha") || def.includes("hash")) {
+    
+    // Column-level masking patterns
+    if (
+      // Explicit keywords
+      def.includes("column_mask") || 
+      def.includes("mask_value") || 
+      def.includes("sha") || 
+      def.includes("hash") ||
+      def.includes("encrypt") ||
+      def.includes("redact") ||
+      def.includes("anonymize") ||
+      name.includes("mask") ||
+      name.includes("encrypt") ||
+      // ABAC Pattern: Common naming conventions for column mask functions
+      name.includes("mascarar") ||
+      name.includes("mask_") ||
+      name.includes("_mask") ||
+      (def.includes("case") && def.includes("when")) // CASE WHEN masking pattern
+    ) {
       columnMasks.push({ table: r.routine_name ?? "", column: "", definition: r.routine_definition ?? "" });
     }
   });
@@ -365,11 +404,25 @@ export function computeGovernanceScore(data: GovernanceAnalysisData): {
   }
 
   // 5. Dynamic security score (15 pts)
-  const secScore = data.security.summary.totalFunctions > 0 ? 15 : 0;
-  breakdown.security = secScore;
-  if (data.security.summary.rowFilterCount === 0 && data.security.summary.columnMaskCount === 0) {
+  // Se houver QUALQUER função detectada, é pelo menos um início de segurança dinâmica
+  const hasMaskingFunctions = data.security.summary.totalFunctions > 0;
+  const secScore = hasMaskingFunctions ? 10 : 0; // 10 pts se houver funções, 15 pts se categorizadas explicitamente
+  const explicitMaskingDetected = data.security.summary.rowFilterCount > 0 || data.security.summary.columnMaskCount > 0;
+  const finalSecScore = explicitMaskingDetected ? 15 : secScore;
+  
+  breakdown.security = finalSecScore;
+  
+  // Determinar qual gap mostrar
+  if (data.security.summary.totalFunctions === 0) {
+    // Nenhuma função de segurança encontrada
     gaps.push("Nenhuma política de mascaramento ou filtro de linha detectada");
     recommendations.push("Implemente Column Masking e Row-Level Security para proteger dados sensíveis em produção.");
+  } else if (!explicitMaskingDetected) {
+    // Funções encontradas mas sem categoria explícita
+    gaps.push(
+      `${data.security.summary.totalFunctions} função(ões) de segurança detectada(s), mas sem categorização explícita (esperado: keywords como 'mask', 'filter', 'rls')`
+    );
+    recommendations.push("Verifique se as funções de mascaramento estão nomeadas com palavras-chave detectáveis (mask, filter, rls, row_filter).");
   }
 
   const score = Math.min(100, Object.values(breakdown).reduce((a, b) => a + b, 0));
