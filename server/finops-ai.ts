@@ -99,14 +99,14 @@ export function truncateContext(data: any[], maxItems: number = 3): any[] {
 export function getOptimizedModel(action: string): { model: string; temperature: number } {
   // SecOps é background/repetitivo, usa modelo mais barato
   if (action === "secops") {
-    return { model: "gpt-4o-mini", temperature: 0.1 };
+    return { model: "claude-haiku-4-5", temperature: 0.1 };
   }
   
-  // Copilot de leitura simples pode usar modelo barato
+  // Copilot de leitura simples pode usar modelo eficiente
   if (action === "copilot_read") {
-    return { model: "gpt-4o-mini", temperature: 0.1 };
+    return { model: "claude-haiku-4-5", temperature: 0.1 };
   }
   
   // Self-Healing e Copilot de Escrita (geração de políticas) exigem mais raciocínio
-  return { model: "gpt-4o", temperature: 0.2 };
+  return { model: "claude-sonnet-4-6", temperature: 0.2 };
 }
