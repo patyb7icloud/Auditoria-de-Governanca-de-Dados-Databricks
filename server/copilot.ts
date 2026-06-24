@@ -1,5 +1,6 @@
 import { invokeLLM } from "./_core/llm";
 import { executeStatement, DatabricksConfig } from "./databricks";
+import { checkRateLimit, incrementUsage, getFromCache, saveToCache, getOptimizedModel } from "./finops-ai";
 
 export interface CopilotResponse {
   answer: string;
@@ -15,6 +16,23 @@ export async function askCopilot(
   config: DatabricksConfig,
   question: string
 ): Promise<CopilotResponse> {
+  // FINOPS AI: 1. Rate Limiting
+  const aiConfig = { userId: "user123", tenantId: config.catalog, action: "copilot" as const };
+  const rateLimit = checkRateLimit(aiConfig);
+  if (!rateLimit.allowed) {
+    return { answer: `Limite de uso atingido para proteção de custos. Você poderá fazer novas perguntas em ${rateLimit.resetInMinutes} minutos.` };
+  }
+
+  // FINOPS AI: 2. Semantic Caching
+  const cacheKey = `copilot:${config.catalog}:${question.toLowerCase().trim()}`;
+  const cached = getFromCache(cacheKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  // FINOPS AI: 3. Model Routing (usar mini para a decisão inicial)
+  const { model: decisionModel } = getOptimizedModel("copilot_read");
+
   // 1. LLM decide qual consulta SQL executar baseado na pergunta
   const systemPrompt = `
     Você é o 'Data Steward AI', um assistente especializado em Databricks Unity Catalog.
@@ -40,7 +58,9 @@ export async function askCopilot(
   try {
     const llmDecisionStr = await invokeLLM(question, {
       systemPrompt,
-      temperature: 0.1
+      temperature: 0.1,
+      // @ts-ignore - simulando passagem de modelo
+      model: decisionModel 
     });
 
     const decision = JSON.parse(llmDecisionStr);
@@ -58,12 +78,19 @@ export async function askCopilot(
       
       const finalAnswer = await invokeLLM(answerPrompt, { temperature: 0.7 });
       
-      return {
+      const response = {
         answer: finalAnswer,
         sqlExecuted: decision.sql,
         data: result.rows
       };
+
+      // FINOPS AI: Salvar no cache e incrementar uso
+      saveToCache(cacheKey, JSON.stringify(response));
+      incrementUsage(aiConfig);
+
+      return response;
     } else if (decision.intent === "write") {
+      incrementUsage(aiConfig);
       return {
         answer: `Entendi que você quer realizar uma alteração. A query gerada foi:\n\n\`\`\`sql\n${decision.sql}\n\`\`\`\n\nPor questões de segurança (SecOps), por favor revise e confirme a execução.`,
         sqlExecuted: decision.sql,

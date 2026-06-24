@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { executeStatement } from "./databricks";
+import { checkRateLimit, incrementUsage, truncateContext, getOptimizedModel } from "./finops-ai";
 
 export interface DatabricksConfig {
   host: string;
@@ -26,6 +27,13 @@ export async function generateSelfHealingSuggestions(
   schema: string,
   tableName: string
 ): Promise<SelfHealingSuggestion[]> {
+  // FINOPS AI: Rate Limiting
+  const aiConfig = { userId: "user123", tenantId: config.catalog, action: "self_healing" as const };
+  const rateLimit = checkRateLimit(aiConfig);
+  if (!rateLimit.allowed) {
+    throw new Error(`Limite de IA atingido. Tente novamente em ${rateLimit.resetInMinutes} minutos.`);
+  }
+
   // 1. Obter metadados da tabela
   const tableMetadata = await executeStatement(
     config,
@@ -38,6 +46,10 @@ export async function generateSelfHealingSuggestions(
     `SELECT * FROM ${config.catalog}.${schema}.${tableName} LIMIT 5`
   );
 
+  // FINOPS AI: Truncar contexto para economizar tokens
+  const safeMetadata = truncateContext(tableMetadata.rows.filter(r => !r.col_name?.startsWith('#')), 20); // max 20 colunas
+  const safeDataSample = truncateContext(dataSample.rows, 3); // max 3 linhas para IA (economia de 40% de tokens)
+
   // 3. Preparar prompt para o LLM
   const prompt = `
     Atue como um Especialista em Governança de Dados Sênior e DPO (Data Protection Officer).
@@ -45,11 +57,11 @@ export async function generateSelfHealingSuggestions(
     
     Tabela: ${config.catalog}.${schema}.${tableName}
     
-    Colunas e Tipos:
-    ${JSON.stringify(tableMetadata.rows.filter(r => !r.col_name?.startsWith('#')), null, 2)}
+    Colunas e Tipos (truncado):
+    ${JSON.stringify(safeMetadata, null, 2)}
     
-    Amostra de Dados (5 linhas):
-    ${JSON.stringify(dataSample.rows, null, 2)}
+    Amostra de Dados (truncado):
+    ${JSON.stringify(safeDataSample, null, 2)}
     
     Sua tarefa:
     1. Gere uma descrição de negócio clara e profissional para a tabela.
@@ -73,10 +85,15 @@ export async function generateSelfHealingSuggestions(
   `;
 
   try {
+    const { model } = getOptimizedModel("self_healing");
     const llmResponse = await invokeLLM(prompt, {
       systemPrompt: "Você é um assistente de IA especializado em governança de dados, LGPD e Databricks Unity Catalog. Retorne apenas JSON válido.",
-      temperature: 0.1
+      temperature: 0.1,
+      // @ts-ignore
+      model
     });
+    
+    incrementUsage(aiConfig);
 
     const result = JSON.parse(llmResponse);
     const suggestions: SelfHealingSuggestion[] = [];
