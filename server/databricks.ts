@@ -188,6 +188,9 @@ export async function analyzeTags(config: DatabricksConfig) {
     tagDist[tag] = (tagDist[tag] ?? 0) + 1;
   });
 
+  // Count unique tables with tags
+  const tablesWithTags = new Set(tableTags.rows.map((r) => `${r.schema_name}.${r.table_name}`));
+
   const sensitiveKeywords = ["pii", "lgpd", "confidential", "confidencial", "sensitive", "sensivel", "restricted", "restrito"];
   const sensitiveCount = [...tableTags.rows, ...columnTags.rows].filter((r) =>
     sensitiveKeywords.some((k) => (r.tag_name ?? "").toLowerCase().includes(k))
@@ -201,6 +204,7 @@ export async function analyzeTags(config: DatabricksConfig) {
       totalTableTags: tableTags.rows.length,
       totalColumnTags: columnTags.rows.length,
       uniqueTags: Object.keys(tagDist).length,
+      tablesWithTags: tablesWithTags.size,
       sensitiveDataTagged: sensitiveCount,
     },
   };

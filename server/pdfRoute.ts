@@ -18,7 +18,7 @@ function buildPdfData(session: any, results: any[]): PdfReportData {
 
   const structure = byType["structure"] ?? { catalogs: [], schemas: [], tables: [], summary: { totalCatalogs: 0, totalSchemas: 0, totalTables: 0, totalViews: 0 } };
   const glossary = byType["glossary"] ?? { tablesWithComments: [], columnsWithComments: [], summary: { totalTables: 0, documentedTables: 0, tableDocCoverage: 0, totalColumns: 0, documentedColumns: 0, columnDocCoverage: 0 } };
-  const tags = byType["tags"] ?? { tableTags: [], columnTags: [], tagDistribution: [], summary: { totalTableTags: 0, totalColumnTags: 0, uniqueTags: 0, sensitiveDataTagged: 0 } };
+  const tags = byType["tags"] ?? { tableTags: [], columnTags: [], tagDistribution: [], summary: { totalTableTags: 0, totalColumnTags: 0, uniqueTags: 0, tablesWithTags: 0, sensitiveDataTagged: 0 } };
   const access = byType["access"] ?? { tablePrivileges: [], catalogPrivileges: [], schemaPrivileges: [], privilegeDistribution: [], summary: { totalGrants: 0, uniqueGrantees: 0, tableGrants: 0, catalogGrants: 0, schemaGrants: 0 } };
   const lineage = byType["lineage"] ?? { lineageEdges: [], summary: { totalEdges: 0, uniqueSources: 0, uniqueTargets: 0 } };
   const security = byType["security"] ?? { maskingFunctions: [], rowFilters: [], columnMasks: [], summary: { totalFunctions: 0, rowFilterCount: 0, columnMaskCount: 0, tablesChecked: 0 } };
@@ -30,6 +30,8 @@ function buildPdfData(session: any, results: any[]): PdfReportData {
   const docCov = glossary.summary.tableDocCoverage ?? 0;
   const colDocCov = glossary.summary.columnDocCoverage ?? 0;
   const tagCount = tags.summary.totalTableTags + tags.summary.totalColumnTags;
+  const tablesWithTagsCount = tags.summary.tablesWithTags ?? 0;
+  const totalTablesAndViews = (structure.summary.totalTables ?? 0) + (structure.summary.totalViews ?? 0);
   const lineageEdges = lineage.summary.totalEdges ?? 0;
   const secFuncs = security.summary.totalFunctions ?? 0;
   const grants = access.summary.totalGrants ?? 0;
@@ -87,7 +89,7 @@ function buildPdfData(session: any, results: any[]): PdfReportData {
       totalSchemas: structure.summary.totalSchemas ?? 0,
       totalTables: (structure.summary.totalTables ?? 0) + (structure.summary.totalViews ?? 0),
       docCoverage: docCov,
-      tagCoverage: tagCount > 0 ? Math.min(100, (tagCount / Math.max(1, structure.summary.totalTables)) * 100) : 0,
+      tagCoverage: totalTablesAndViews > 0 ? Math.round((tablesWithTagsCount / Math.max(1, totalTablesAndViews)) * 100) : 0,
       totalGrants: grants,
       lineageEdges,
       securityFunctions: secFuncs,

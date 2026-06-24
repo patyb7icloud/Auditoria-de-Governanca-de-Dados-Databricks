@@ -201,7 +201,7 @@ export const appRouter = router({
           totalSchemas: results.structure?.summary.totalSchemas ?? 0,
           totalTables: (results.structure?.summary.totalTables ?? 0) + (results.structure?.summary.totalViews ?? 0),
           docCoverage: results.glossary?.summary.tableDocCoverage ?? 0,
-          tagCoverage: results.tags ? (results.tags.summary.totalTableTags / Math.max(1, (results.structure?.summary.totalTables ?? 1))) * 100 : 0,
+          tagCoverage: results.tags && results.structure ? Math.round((results.tags.summary.tablesWithTags / Math.max(1, (results.structure.summary.totalTables + results.structure.summary.totalViews))) * 100) : 0,
           errorMessage: hasErrors ? JSON.stringify(errors) : undefined,
         });
 
