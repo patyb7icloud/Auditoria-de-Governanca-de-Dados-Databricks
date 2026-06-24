@@ -400,6 +400,32 @@ export const appRouter = router({
       }),
   }),
 
+  // Monitoramento Semanal do Copiloto
+  monitoring: router({
+    getWeeklyMetrics: protectedProcedure
+      .input(z.object({ tenantCatalog: z.string() }))
+      .query(async ({ input }) => {
+        const { getLatestWeeklyMetrics } = await import("./monitoring");
+        return await getLatestWeeklyMetrics(input.tenantCatalog);
+      }),
+
+    generateWeeklyMetrics: protectedProcedure
+      .input(z.object({ tenantCatalog: z.string() }))
+      .mutation(async ({ input }) => {
+        const { generateWeeklyMetrics } = await import("./monitoring");
+        return await generateWeeklyMetrics(input.tenantCatalog);
+      }),
+
+    setupWeeklyJob: protectedProcedure
+      .input(z.object({ tenantCatalog: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { setupWeeklyMonitoringJob } = await import("./setup-monitoring-job");
+        // Em WebDev, ctx.req.cookies.app_session_id contém a sessão
+        const sessionToken = ctx.req.cookies?.app_session_id || "";
+        return await setupWeeklyMonitoringJob(input.tenantCatalog, sessionToken);
+      }),
+  }),
+
   // LGPD/GDPR Compliance Router
   lgpd: router({
     analyzeCompliance: protectedProcedure

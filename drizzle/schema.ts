@@ -131,6 +131,24 @@ export type SelfHealingKnowledge = typeof selfHealingKnowledgeBase.$inferSelect;
 export type InsertSelfHealingKnowledge = typeof selfHealingKnowledgeBase.$inferInsert;
 
 // ─── MÉTRICAS DE ECONOMIA DE IA ──────────────────────────────────────────────
+// Registro semanal de métricas de IA para o painel de monitoramento
+export const aiWeeklyMetrics = pgTable("ai_weekly_metrics", {
+  id: serial("id").primaryKey(),
+  tenantCatalog: varchar("tenantCatalog", { length: 256 }).notNull(),
+  weekStartDate: timestamp("weekStartDate").notNull(),
+  weekEndDate: timestamp("weekEndDate").notNull(),
+  totalQuestions: integer("totalQuestions").notNull().default(0),
+  totalCostUSD: doublePrecision("totalCostUSD").notNull().default(0),
+  cacheHitRate: doublePrecision("cacheHitRate").notNull().default(0),
+  totalSavedUSD: doublePrecision("totalSavedUSD").notNull().default(0),
+  rateLimitBlocks: integer("rateLimitBlocks").notNull().default(0),
+  topQuestionsJson: json("topQuestionsJson"), // Array serializado das top 5 perguntas
+  anomaliesJson: json("anomaliesJson"), // Array serializado de alertas
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type AiWeeklyMetrics = typeof aiWeeklyMetrics.$inferSelect;
+export type InsertAiWeeklyMetrics = typeof aiWeeklyMetrics.$inferInsert;
+
 // Registro diário de economia gerada pelo Knowledge Base (para o painel de FinOps de IA)
 export const aiCostSavingsLog = pgTable("ai_cost_savings_log", {
   id: serial("id").primaryKey(),

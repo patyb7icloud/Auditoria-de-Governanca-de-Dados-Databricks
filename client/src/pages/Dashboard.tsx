@@ -20,6 +20,7 @@ import { FinOpsPanel } from "@/components/FinOpsPanel";
 import { SelfHealingPanel } from "@/components/SelfHealingPanel";
 import { SecOpsPanel } from "@/components/SecOpsPanel";
 import { FinOpsAIPanel } from "@/components/FinOpsAIPanel";
+import { MonitoringPanel } from "@/components/MonitoringPanel";
 
 const ANALYSIS_META = [
   { type: "structure", label: "Mapeamento de Estrutura", icon: Database, color: "text-info" },
@@ -269,9 +270,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Pilares Revolucionários */}
+        {/* Pilares Revolucionários e Monitoramento */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
           <div className="lg:col-span-2 space-y-6">
+            <MonitoringPanel tenantCatalog={session.targetCatalog} />
             <FinOpsAIPanel />
             <SelfHealingPanel schema="default" tableName="customers" />
             <FinOpsPanel />
