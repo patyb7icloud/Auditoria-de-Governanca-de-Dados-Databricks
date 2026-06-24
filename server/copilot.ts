@@ -27,13 +27,43 @@ export async function askCopilot(
   // FINOPS AI: 2. Knowledge Base (Banco de Conhecimento Persistente)
   // Busca na base de dados para ver se alguém do tenant já fez essa pergunta
   const cachedKnowledge = await findInCopilotKnowledgeBase(config.catalog, question);
+  
   if (cachedKnowledge) {
-    return {
-      answer: cachedKnowledge.answer,
-      sqlExecuted: cachedKnowledge.sqlExecuted || undefined,
-      data: cachedKnowledge.resultData as any[],
-      actionRequired: cachedKnowledge.intent === "write"
-    };
+    // LÓGICA INTELIGENTE: Se a pergunta é 'operational' (dados vivos) e tem SQL,
+    // re-executamos o SQL no Databricks para garantir dados frescos,
+    // mas evitamos o custo do LLM de montar o SQL.
+    if (cachedKnowledge.questionType === "operational" && cachedKnowledge.sqlExecuted && cachedKnowledge.intent === "read") {
+      try {
+        const freshData = await executeStatement(config, cachedKnowledge.sqlExecuted);
+        
+        // Usa o modelo mais barato apenas para re-formatar a resposta com os dados novos
+        const answerPrompt = cachedKnowledge.answerPromptTemplate?.replace(
+          "{{DATA}}", 
+          JSON.stringify(freshData.rows.slice(0, 10))
+        ) || `Responda a pergunta: ${question}. Dados novos: ${JSON.stringify(freshData.rows.slice(0, 10))}`;
+        
+        const { model: cheapModel } = getOptimizedModel("copilot_read");
+        const freshAnswer = await invokeLLM(answerPrompt, { temperature: 0.1, /* @ts-ignore */ model: cheapModel });
+        
+        return {
+          answer: freshAnswer,
+          sqlExecuted: cachedKnowledge.sqlExecuted,
+          data: freshData.rows,
+          actionRequired: false
+        };
+      } catch (e) {
+        // Se a query falhar (ex: tabela foi apagada), ignoramos o cache e deixamos o LLM gerar do zero
+        console.log("Falha ao re-executar query do cache operacional, gerando do zero", e);
+      }
+    } else {
+      // Se for 'structural' ou 'write', retorna exatamente como está no banco (cache total)
+      return {
+        answer: cachedKnowledge.answer,
+        sqlExecuted: cachedKnowledge.sqlExecuted || undefined,
+        data: cachedKnowledge.resultData as any[],
+        actionRequired: cachedKnowledge.intent === "write"
+      };
+    }
   }
 
   // FINOPS AI: 3. Model Routing (usar mini para a decisão inicial)
@@ -50,14 +80,18 @@ export async function askCopilot(
     - system.information_schema.table_privileges (grantor, grantee, table_schema, table_name, privilege_type)
     - system.information_schema.table_tags (schema_name, table_name, tag_name, tag_value)
     
-    Analise a pergunta do usuário e retorne um JSON com a query SQL para responder a pergunta.
-    Se a pergunta for sobre criar uma política (ex: mascaramento), retorne a query de criação.
+    Analise a pergunta do usuário e decida:
+    1. A intenção: 'read' (SELECT, SHOW, DESCRIBE) ou 'write' (GRANT, REVOKE, ALTER).
+    2. O tipo de pergunta (questionType):
+       - 'structural': A resposta depende de metadados fixos (quais colunas existem, quem é o dono da tabela). Muda raramente.
+       - 'operational': A resposta depende de dados vivos ou acessos (quais tabelas contêm CPFs agora, quem tem acesso hoje). Muda frequentemente.
     
-    Formato de saída:
+    Retorne um JSON estrito com a query SQL:
     {
       "intent": "read" | "write",
+      "questionType": "structural" | "operational",
       "sql": "SELECT ... FROM ...",
-      "explanation": "Vou buscar os dados na tabela X..."
+      "explanation": "Sua justificativa"
     }
   `;
 
@@ -76,12 +110,13 @@ export async function askCopilot(
       const result = await executeStatement(config, decision.sql);
       
       // 3. LLM formata a resposta final
-      const answerPrompt = `
+      const answerPromptTemplate = `
         Pergunta original: ${question}
-        Resultado do Databricks: ${JSON.stringify(result.rows.slice(0, 10))}
+        Resultado do Databricks: {{DATA}}
         Responda à pergunta do usuário de forma natural, clara e profissional.
       `;
       
+      const answerPrompt = answerPromptTemplate.replace("{{DATA}}", JSON.stringify(result.rows.slice(0, 10)));
       const finalAnswer = await invokeLLM(answerPrompt, { temperature: 0.7 });
       
       const response = {
@@ -97,7 +132,9 @@ export async function askCopilot(
         sqlExecuted: decision.sql,
         answer: finalAnswer,
         resultData: result.rows,
-        intent: "read"
+        intent: "read",
+        questionType: decision.questionType || "operational",
+        answerPromptTemplate: answerPromptTemplate
       });
       incrementUsage(aiConfig);
 

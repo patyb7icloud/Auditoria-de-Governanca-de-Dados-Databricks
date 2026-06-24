@@ -84,6 +84,10 @@ export const copilotKnowledgeBase = pgTable("copilot_knowledge_base", {
   resultData: json("resultData"),
   // Intenção detectada: 'read' ou 'write'
   intent: varchar("intent", { length: 16 }).default("read"),
+  // Classificação inteligente da pergunta: 'structural' (schema/metadados) ou 'operational' (dados/acessos vivos)
+  questionType: varchar("questionType", { length: 16 }).default("operational").notNull(),
+  // O prompt original usado para gerar a resposta final (necessário para re-gerar a resposta com dados novos)
+  answerPromptTemplate: text("answerPromptTemplate"),
   // Usuário que originou a pergunta (para auditoria)
   askedByUserId: integer("askedByUserId"),
   askedByEmail: varchar("askedByEmail", { length: 320 }),

@@ -58,6 +58,8 @@ export async function saveToCopilotKnowledgeBase(data: {
   answer: string;
   resultData?: any;
   intent?: string;
+  questionType: "structural" | "operational";
+  answerPromptTemplate?: string;
 }) {
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24); // TTL de 24h por padrão para dados dinâmicos
@@ -70,6 +72,8 @@ export async function saveToCopilotKnowledgeBase(data: {
     answer: data.answer,
     resultData: data.resultData,
     intent: data.intent || "read",
+    questionType: data.questionType,
+    answerPromptTemplate: data.answerPromptTemplate,
     expiresAt,
   });
 }
