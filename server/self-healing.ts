@@ -1,14 +1,7 @@
-import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
-import { executeStatement } from "./databricks";
+import { executeStatement, DatabricksConfig } from "./databricks";
 import { checkRateLimit, incrementUsage, truncateContext, getOptimizedModel } from "./finops-ai";
 import { findInSelfHealingKnowledgeBase, saveToSelfHealingKnowledgeBase } from "./knowledge-base";
-
-export interface DatabricksConfig {
-  host: string;
-  token: string;
-  catalog: string;
-}
 
 export interface SelfHealingSuggestion {
   tableName: string;
@@ -94,16 +87,20 @@ export async function generateSelfHealingSuggestions(
 
   try {
     const { model } = getOptimizedModel("self_healing");
-    const llmResponse = await invokeLLM(prompt, {
-      systemPrompt: "Você é um assistente de IA especializado em governança de dados, LGPD e Databricks Unity Catalog. Retorne apenas JSON válido.",
-      temperature: 0.1,
-      // @ts-ignore
-      model
+    const llmResult = await invokeLLM({
+      model,
+      messages: [
+        { role: "system", content: "Você é um assistente de IA especializado em governança de dados, LGPD e Databricks Unity Catalog. Retorne apenas JSON válido, sem markdown." },
+        { role: "user", content: prompt }
+      ],
     });
-    
+
     incrementUsage(aiConfig);
 
-    const result = JSON.parse(llmResponse);
+    const llmText = llmResult.choices?.[0]?.message?.content;
+    const llmStr = typeof llmText === "string" ? llmText : (Array.isArray(llmText) ? (llmText.find((c: any) => c.type === "text") as any)?.text ?? "" : "");
+    const jsonMatch = llmStr.match(/\{[\s\S]*\}/);
+    const result = JSON.parse(jsonMatch?.[0] ?? llmStr);
     const suggestions: SelfHealingSuggestion[] = [];
 
     // Sugestão para a tabela

@@ -412,8 +412,8 @@ export const appRouter = router({
         // TODO: Implement real analysis with Databricks queries
         // For now, return mock data with structure matching real analysis
         return analyzeLGPDCompliance({
-          databricksHost: input.databricksHost,
-          databricksToken: input.databricksToken,
+          host: input.databricksHost,
+          token: input.databricksToken,
           catalog: input.catalog,
         });
       }),
@@ -424,10 +424,10 @@ export const appRouter = router({
           name: z.string(),
           type: z.string(),
         })),
-        sampleData: z.record(z.any()).optional(),
+        sampleData: z.array(z.record(z.string(), z.unknown())).optional(),
       }))
       .query(({ input }) => {
-        return detectPIIColumns(input.columns, input.sampleData);
+        return detectPIIColumns(input.columns, input.sampleData as Record<string, unknown>[] | undefined);
       }),
 
     generateRecommendations: protectedProcedure

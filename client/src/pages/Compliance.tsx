@@ -33,7 +33,7 @@ export default function LGPDCompliance() {
 
   // Fetch compliance analysis data from backend
   const analyzeComplianceMutation = trpc.lgpd.analyzeCompliance.useMutation();
-  const { data: complianceAnalysis, isLoading: isLoadingAnalysis } = analyzeComplianceMutation;
+  const { data: complianceAnalysis, isPending: isLoadingAnalysis } = analyzeComplianceMutation;
   
   // Get stored Databricks config from session or localStorage
   const [databricksConfig, setDatabricksConfig] = useState<{
@@ -72,21 +72,36 @@ export default function LGPDCompliance() {
     }
   };
 
-  // Use real data if available, otherwise mock data for demo
-  const complianceData = complianceAnalysis || {
-    score: 45,
-    riskLevel: 'high' as const,
-    criticalIssues: 3,
-    piiColumnsUntagged: 5,
-    retentionPolicies: 0,
-    encryptedTables: 2,
-    auditLogsEnabled: false,
-    dsrReadiness: {
-      export: false,
-      delete: false,
-      access: false,
-    },
-  };
+  // Normaliza LGPDAnalysis (estrutura aninhada do servidor) para estrutura flat usada no template
+  const complianceData = complianceAnalysis
+    ? {
+        score: complianceAnalysis.summary.complianceScore,
+        riskLevel: complianceAnalysis.summary.riskLevel,
+        criticalIssues: complianceAnalysis.summary.criticalIssues,
+        piiColumnsUntagged: complianceAnalysis.piiDetection.untaggedPiiRisk,
+        retentionPolicies: complianceAnalysis.retention.policies.filter((p) => p.assessment === 'defined').length,
+        encryptedTables: complianceAnalysis.encryption.encryptedTables,
+        auditLogsEnabled: complianceAnalysis.audit.accessLogsEnabled,
+        dsrReadiness: {
+          export: complianceAnalysis.dsr.readyForExport,
+          delete: complianceAnalysis.dsr.readyForDeletion,
+          access: complianceAnalysis.dsr.readyForDSR,
+        },
+      }
+    : {
+        score: 45,
+        riskLevel: 'high' as const,
+        criticalIssues: 3,
+        piiColumnsUntagged: 5,
+        retentionPolicies: 0,
+        encryptedTables: 2,
+        auditLogsEnabled: false,
+        dsrReadiness: {
+          export: false,
+          delete: false,
+          access: false,
+        },
+      };
 
   const mockRecommendations = [
     {

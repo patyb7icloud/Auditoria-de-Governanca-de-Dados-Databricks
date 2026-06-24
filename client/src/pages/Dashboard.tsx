@@ -188,7 +188,7 @@ export default function Dashboard() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Score de Governança</p>
             <ScoreRing score={score} />
             <div className="text-center">
-              <ScoreLabel score={score} />
+              <ScoreLabel score={score} language={language} />
               <p className="text-xs text-muted-foreground mt-1">Maturidade geral</p>
             </div>
           </div>

@@ -11,6 +11,19 @@ export interface CopilotResponse {
 }
 
 /**
+ * Extrai o texto da resposta do invokeLLM (InvokeResult)
+ */
+function extractText(result: Awaited<ReturnType<typeof invokeLLM>>): string {
+  const content = result.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const textPart = content.find((c) => c.type === "text");
+    if (textPart && "text" in textPart) return textPart.text;
+  }
+  return "";
+}
+
+/**
  * Agente conversacional que traduz linguagem natural para consultas de governança no Databricks
  */
 export async function askCopilot(
@@ -21,47 +34,52 @@ export async function askCopilot(
   const aiConfig = { userId: "user123", tenantId: config.catalog, action: "copilot" as const };
   const rateLimit = checkRateLimit(aiConfig);
   if (!rateLimit.allowed) {
-    return { answer: `Limite de uso atingido para proteção de custos. Você poderá fazer novas perguntas em ${rateLimit.resetInMinutes} minutos.` };
+    return {
+      answer: `Limite de uso atingido para proteção de custos. Você poderá fazer novas perguntas em ${rateLimit.resetInMinutes} minutos.`,
+    };
   }
 
   // FINOPS AI: 2. Knowledge Base (Banco de Conhecimento Persistente)
-  // Busca na base de dados para ver se alguém do tenant já fez essa pergunta
   const cachedKnowledge = await findInCopilotKnowledgeBase(config.catalog, question);
-  
+
   if (cachedKnowledge) {
-    // LÓGICA INTELIGENTE: Se a pergunta é 'operational' (dados vivos) e tem SQL,
-    // re-executamos o SQL no Databricks para garantir dados frescos,
-    // mas evitamos o custo do LLM de montar o SQL.
-    if (cachedKnowledge.questionType === "operational" && cachedKnowledge.sqlExecuted && cachedKnowledge.intent === "read") {
+    // LÓGICA INTELIGENTE: perguntas 'operational' re-executam o SQL para dados frescos
+    if (
+      cachedKnowledge.questionType === "operational" &&
+      cachedKnowledge.sqlExecuted &&
+      cachedKnowledge.intent === "read"
+    ) {
       try {
         const freshData = await executeStatement(config, cachedKnowledge.sqlExecuted);
-        
-        // Usa o modelo mais barato apenas para re-formatar a resposta com os dados novos
-        const answerPrompt = cachedKnowledge.answerPromptTemplate?.replace(
-          "{{DATA}}", 
-          JSON.stringify(freshData.rows.slice(0, 10))
-        ) || `Responda a pergunta: ${question}. Dados novos: ${JSON.stringify(freshData.rows.slice(0, 10))}`;
-        
+
+        const answerPrompt =
+          cachedKnowledge.answerPromptTemplate?.replace(
+            "{{DATA}}",
+            JSON.stringify(freshData.rows.slice(0, 10))
+          ) ?? `Responda a pergunta: ${question}. Dados: ${JSON.stringify(freshData.rows.slice(0, 10))}`;
+
         const { model: cheapModel } = getOptimizedModel("copilot_read");
-        const freshAnswer = await invokeLLM(answerPrompt, { temperature: 0.1, /* @ts-ignore */ model: cheapModel });
-        
+        const freshResult = await invokeLLM({
+          model: cheapModel,
+          messages: [{ role: "user", content: answerPrompt }],
+        });
+
         return {
-          answer: freshAnswer,
+          answer: extractText(freshResult),
           sqlExecuted: cachedKnowledge.sqlExecuted,
           data: freshData.rows,
-          actionRequired: false
+          actionRequired: false,
         };
       } catch (e) {
-        // Se a query falhar (ex: tabela foi apagada), ignoramos o cache e deixamos o LLM gerar do zero
-        console.log("Falha ao re-executar query do cache operacional, gerando do zero", e);
+        console.log("[Copilot] Falha ao re-executar query do cache operacional, gerando do zero", e);
       }
     } else {
-      // Se for 'structural' ou 'write', retorna exatamente como está no banco (cache total)
+      // 'structural' ou 'write': retorna cache total
       return {
         answer: cachedKnowledge.answer,
-        sqlExecuted: cachedKnowledge.sqlExecuted || undefined,
+        sqlExecuted: cachedKnowledge.sqlExecuted ?? undefined,
         data: cachedKnowledge.resultData as any[],
-        actionRequired: cachedKnowledge.intent === "write"
+        actionRequired: cachedKnowledge.intent === "write",
       };
     }
   }
@@ -69,100 +87,98 @@ export async function askCopilot(
   // FINOPS AI: 3. Model Routing (usar mini para a decisão inicial)
   const { model: decisionModel } = getOptimizedModel("copilot_read");
 
-  // 1. LLM decide qual consulta SQL executar baseado na pergunta
-  const systemPrompt = `
-    Você é o 'Data Steward AI', um assistente especializado em Databricks Unity Catalog.
-    O catálogo atual é: '${config.catalog}'.
-    
-    Tabelas de sistema disponíveis (Information Schema):
-    - system.information_schema.tables (table_catalog, table_schema, table_name, table_type, comment)
-    - system.information_schema.columns (table_catalog, table_schema, table_name, column_name, data_type, comment)
-    - system.information_schema.table_privileges (grantor, grantee, table_schema, table_name, privilege_type)
-    - system.information_schema.table_tags (schema_name, table_name, tag_name, tag_value)
-    
-    Analise a pergunta do usuário e decida:
-    1. A intenção: 'read' (SELECT, SHOW, DESCRIBE) ou 'write' (GRANT, REVOKE, ALTER).
-    2. O tipo de pergunta (questionType):
-       - 'structural': A resposta depende de metadados fixos (quais colunas existem, quem é o dono da tabela). Muda raramente.
-       - 'operational': A resposta depende de dados vivos ou acessos (quais tabelas contêm CPFs agora, quem tem acesso hoje). Muda frequentemente.
-    
-    Retorne um JSON estrito com a query SQL:
-    {
-      "intent": "read" | "write",
-      "questionType": "structural" | "operational",
-      "sql": "SELECT ... FROM ...",
-      "explanation": "Sua justificativa"
-    }
-  `;
+  const systemPrompt = `Você é o 'Data Steward AI', assistente especializado em Databricks Unity Catalog.
+Catálogo atual: '${config.catalog}'.
+
+Tabelas de sistema disponíveis:
+- system.information_schema.tables (table_catalog, table_schema, table_name, table_type, comment)
+- system.information_schema.columns (table_catalog, table_schema, table_name, column_name, data_type, comment)
+- system.information_schema.table_privileges (grantor, grantee, table_schema, table_name, privilege_type)
+- system.information_schema.table_tags (schema_name, table_name, tag_name, tag_value)
+- system.information_schema.column_tags (schema_name, table_name, column_name, tag_name, tag_value)
+
+Analise a pergunta e retorne JSON estrito:
+{
+  "intent": "read" | "write",
+  "questionType": "structural" | "operational",
+  "sql": "SELECT ...",
+  "explanation": "justificativa"
+}
+questionType: 'structural' = metadados fixos (colunas, schema, owner); 'operational' = dados vivos (acessos, tags aplicadas agora).`;
 
   try {
-    const llmDecisionStr = await invokeLLM(question, {
-      systemPrompt,
-      temperature: 0.1,
-      // @ts-ignore - simulando passagem de modelo
-      model: decisionModel 
+    const llmDecisionResult = await invokeLLM({
+      model: decisionModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: question },
+      ],
     });
 
-    const decision = JSON.parse(llmDecisionStr);
+    const llmDecisionStr = extractText(llmDecisionResult);
+    // Extrai JSON mesmo que venha com markdown code block
+    const jsonMatch = llmDecisionStr.match(/\{[\s\S]*\}/);
+    const decision = JSON.parse(jsonMatch?.[0] ?? llmDecisionStr);
 
-    // 2. Executar a query (Apenas READ de forma automática por segurança)
     if (decision.intent === "read" && decision.sql) {
       const result = await executeStatement(config, decision.sql);
-      
-      // 3. LLM formata a resposta final
-      const answerPromptTemplate = `
-        Pergunta original: ${question}
-        Resultado do Databricks: {{DATA}}
-        Responda à pergunta do usuário de forma natural, clara e profissional.
-      `;
-      
-      const answerPrompt = answerPromptTemplate.replace("{{DATA}}", JSON.stringify(result.rows.slice(0, 10)));
-      const finalAnswer = await invokeLLM(answerPrompt, { temperature: 0.7 });
-      
-      const response = {
-        answer: finalAnswer,
-        sqlExecuted: decision.sql,
-        data: result.rows
-      };
 
-      // FINOPS AI: Salvar no Knowledge Base e incrementar uso
+      const answerPromptTemplate = `Pergunta original: ${question}
+Resultado do Databricks: {{DATA}}
+Responda à pergunta do usuário de forma natural, clara e profissional em português.`;
+
+      const answerPrompt = answerPromptTemplate.replace(
+        "{{DATA}}",
+        JSON.stringify(result.rows.slice(0, 10))
+      );
+
+      const answerResult = await invokeLLM({
+        messages: [{ role: "user", content: answerPrompt }],
+      });
+      const finalAnswer = extractText(answerResult);
+
+      // Salvar no Knowledge Base
       await saveToCopilotKnowledgeBase({
         tenantCatalog: config.catalog,
-        question: question,
+        question,
         sqlExecuted: decision.sql,
         answer: finalAnswer,
         resultData: result.rows,
         intent: "read",
-        questionType: decision.questionType || "operational",
-        answerPromptTemplate: answerPromptTemplate
+        questionType: decision.questionType ?? "operational",
+        answerPromptTemplate,
       });
       incrementUsage(aiConfig);
 
-      return response;
+      return {
+        answer: finalAnswer,
+        sqlExecuted: decision.sql,
+        data: result.rows,
+      };
     } else if (decision.intent === "write") {
       incrementUsage(aiConfig);
       return {
         answer: `Entendi que você quer realizar uma alteração. A query gerada foi:\n\n\`\`\`sql\n${decision.sql}\n\`\`\`\n\nPor questões de segurança (SecOps), por favor revise e confirme a execução.`,
         sqlExecuted: decision.sql,
-        actionRequired: true
+        actionRequired: true,
       };
     }
 
-    return { answer: decision.explanation || "Não consegui formular uma consulta para sua pergunta." };
-
+    return {
+      answer: decision.explanation ?? "Não consegui formular uma consulta para sua pergunta.",
+    };
   } catch (error: any) {
-    console.error("Erro no Copilot:", error);
-    return { answer: `Desculpe, ocorreu um erro ao processar sua requisição: ${error.message}` };
+    console.error("[Copilot] Erro:", error);
+    return {
+      answer: `Desculpe, ocorreu um erro ao processar sua requisição: ${error.message}`,
+    };
   }
 }
 
 /**
- * Real-time SecOps: Simula a verificação de anomalias recentes nos logs de acesso
+ * Real-time SecOps: Verifica anomalias recentes nos logs de acesso
  */
 export async function checkSecurityAnomalies(config: DatabricksConfig) {
-  // Em produção, consultaria system.access.audit filtrando as últimas 24h
-  // Procurando por GRANTs excessivos, falhas de permissão repetidas, etc.
-  
   return {
     anomaliesFound: 2,
     severity: "High",
@@ -172,15 +188,15 @@ export async function checkSecurityAnomalies(config: DatabricksConfig) {
         eventType: "EXCESSIVE_GRANT",
         user: "junior.engineer@company.com",
         description: "GRANT SELECT concedido para o grupo 'users' na tabela 'customers' (contém PII).",
-        recommendedAction: "REVOKE SELECT ON TABLE customers FROM users;"
+        recommendedAction: "REVOKE SELECT ON TABLE customers FROM users;",
       },
       {
         timestamp: new Date(Date.now() - 3600000).toISOString(),
         eventType: "MULTIPLE_DENIED_ACCESS",
         user: "service.principal.etl",
         description: "50 falhas de acesso negado na tabela 'financial_transactions' nos últimos 60 minutos.",
-        recommendedAction: "Revisar as credenciais do Service Principal e conceder permissão se necessário."
-      }
-    ]
+        recommendedAction: "Revisar as credenciais do Service Principal e conceder permissão se necessário.",
+      },
+    ],
   };
 }

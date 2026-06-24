@@ -3,7 +3,7 @@
  * Uses the Databricks SQL Statement Execution API to run queries against Unity Catalog
  */
 
-interface DatabricksConfig {
+export interface DatabricksConfig {
   host: string;
   token: string;
   catalog: string;
