@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { copilotKnowledgeBase, selfHealingKnowledgeBase, aiCostSavingsLog } from "../drizzle/schema";
-import { eq, and, gt, desc } from "drizzle-orm";
+import { eq, and, gt, desc, or, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 /**
@@ -30,7 +30,11 @@ export async function findInCopilotKnowledgeBase(tenantCatalog: string, question
       and(
         eq(copilotKnowledgeBase.tenantCatalog, tenantCatalog),
         eq(copilotKnowledgeBase.questionNormalized, normalized),
-        gt(copilotKnowledgeBase.expiresAt, new Date()) // Apenas respostas não expiradas
+        // Permitir: expiresAt NULL (nunca expira) OU expiresAt > agora
+        or(
+          isNull(copilotKnowledgeBase.expiresAt),
+          gt(copilotKnowledgeBase.expiresAt, new Date())
+        )
       )
     )
     .limit(1);
@@ -98,7 +102,11 @@ export async function findInSelfHealingKnowledgeBase(tenantCatalog: string, sche
         eq(selfHealingKnowledgeBase.tenantCatalog, tenantCatalog),
         eq(selfHealingKnowledgeBase.schemaName, schemaName),
         eq(selfHealingKnowledgeBase.tableName, tableName),
-        gt(selfHealingKnowledgeBase.expiresAt, new Date())
+        // Permitir: expiresAt NULL (nunca expira) OU expiresAt > agora
+        or(
+          isNull(selfHealingKnowledgeBase.expiresAt),
+          gt(selfHealingKnowledgeBase.expiresAt, new Date())
+        )
       )
     )
     .limit(1);
