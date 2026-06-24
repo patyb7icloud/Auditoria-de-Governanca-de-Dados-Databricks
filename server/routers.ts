@@ -24,6 +24,9 @@ import {
   getAnalysisResultsBySession,
 } from "./db";
 import { analyzeLGPDCompliance, detectPIIColumns, generateLGPDRecommendations } from "./lgpd-compliance";
+import { generateSelfHealingSuggestions, applySelfHealing } from "./self-healing";
+import { analyzeDataROI } from "./finops";
+import { askCopilot, checkSecurityAnomalies } from "./copilot";
 
 const databricksConfigSchema = z.object({
   host: z.string().min(1),
@@ -333,6 +336,67 @@ export const appRouter = router({
         };
 
         return report;
+      }),
+  }),
+
+  // Revolucionário: Auto-Cura (Self-Healing)
+  selfHealing: router({
+    analyzeTable: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+        schema: z.string(),
+        tableName: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        return generateSelfHealingSuggestions(input, input.schema, input.tableName);
+      }),
+    applyFixes: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+        sqlCommands: z.array(z.string()),
+      }))
+      .mutation(async ({ input }) => {
+        return applySelfHealing(input, input.sqlCommands);
+      }),
+  }),
+
+  // Revolucionário: FinOps (Data ROI)
+  finops: router({
+    analyzeROI: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return analyzeDataROI(input);
+      }),
+  }),
+
+  // Revolucionário: Copiloto e SecOps
+  copilot: router({
+    ask: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+        question: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        return askCopilot(input, input.question);
+      }),
+    checkAnomalies: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return checkSecurityAnomalies(input);
       }),
   }),
 

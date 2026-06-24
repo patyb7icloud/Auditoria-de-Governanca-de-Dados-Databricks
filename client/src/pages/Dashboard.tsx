@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { cn } from "@/lib/utils";
+import { CopilotChat } from "@/components/CopilotChat";
+import { FinOpsPanel } from "@/components/FinOpsPanel";
+import { SelfHealingPanel } from "@/components/SelfHealingPanel";
+import { SecOpsPanel } from "@/components/SecOpsPanel";
 
 const ANALYSIS_META = [
   { type: "structure", label: "Mapeamento de Estrutura", icon: Database, color: "text-info" },
@@ -130,6 +134,9 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="min-h-screen p-8 space-y-8">
+        {/* SecOps Alert (Real-time) */}
+        <SecOpsPanel />
+
         {/* Header */}
         <div className="flex items-start justify-between animate-fade-in-up">
           <div>
@@ -258,6 +265,17 @@ export default function Dashboard() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Pilares Revolucionários */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
+          <div className="lg:col-span-2 space-y-6">
+            <SelfHealingPanel schema="default" tableName="customers" />
+            <FinOpsPanel />
+          </div>
+          <div className="lg:col-span-1">
+            <CopilotChat />
           </div>
         </div>
 
