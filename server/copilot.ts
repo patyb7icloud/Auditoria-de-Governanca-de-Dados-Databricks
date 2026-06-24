@@ -1,6 +1,7 @@
 import { invokeLLM } from "./_core/llm";
 import { executeStatement, DatabricksConfig } from "./databricks";
-import { checkRateLimit, incrementUsage, getFromCache, saveToCache, getOptimizedModel } from "./finops-ai";
+import { checkRateLimit, incrementUsage, getOptimizedModel } from "./finops-ai";
+import { findInCopilotKnowledgeBase, saveToCopilotKnowledgeBase } from "./knowledge-base";
 
 export interface CopilotResponse {
   answer: string;
@@ -23,11 +24,16 @@ export async function askCopilot(
     return { answer: `Limite de uso atingido para proteção de custos. Você poderá fazer novas perguntas em ${rateLimit.resetInMinutes} minutos.` };
   }
 
-  // FINOPS AI: 2. Semantic Caching
-  const cacheKey = `copilot:${config.catalog}:${question.toLowerCase().trim()}`;
-  const cached = getFromCache(cacheKey);
-  if (cached) {
-    return JSON.parse(cached);
+  // FINOPS AI: 2. Knowledge Base (Banco de Conhecimento Persistente)
+  // Busca na base de dados para ver se alguém do tenant já fez essa pergunta
+  const cachedKnowledge = await findInCopilotKnowledgeBase(config.catalog, question);
+  if (cachedKnowledge) {
+    return {
+      answer: cachedKnowledge.answer,
+      sqlExecuted: cachedKnowledge.sqlExecuted || undefined,
+      data: cachedKnowledge.resultData as any[],
+      actionRequired: cachedKnowledge.intent === "write"
+    };
   }
 
   // FINOPS AI: 3. Model Routing (usar mini para a decisão inicial)
@@ -84,8 +90,15 @@ export async function askCopilot(
         data: result.rows
       };
 
-      // FINOPS AI: Salvar no cache e incrementar uso
-      saveToCache(cacheKey, JSON.stringify(response));
+      // FINOPS AI: Salvar no Knowledge Base e incrementar uso
+      await saveToCopilotKnowledgeBase({
+        tenantCatalog: config.catalog,
+        question: question,
+        sqlExecuted: decision.sql,
+        answer: finalAnswer,
+        resultData: result.rows,
+        intent: "read"
+      });
       incrementUsage(aiConfig);
 
       return response;

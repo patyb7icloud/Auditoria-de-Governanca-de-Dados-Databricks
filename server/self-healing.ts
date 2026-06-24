@@ -2,6 +2,7 @@ import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { executeStatement } from "./databricks";
 import { checkRateLimit, incrementUsage, truncateContext, getOptimizedModel } from "./finops-ai";
+import { findInSelfHealingKnowledgeBase, saveToSelfHealingKnowledgeBase } from "./knowledge-base";
 
 export interface DatabricksConfig {
   host: string;
@@ -32,6 +33,13 @@ export async function generateSelfHealingSuggestions(
   const rateLimit = checkRateLimit(aiConfig);
   if (!rateLimit.allowed) {
     throw new Error(`Limite de IA atingido. Tente novamente em ${rateLimit.resetInMinutes} minutos.`);
+  }
+
+  // FINOPS AI: Knowledge Base (Banco de Conhecimento Persistente)
+  // Verifica se esta tabela já foi analisada recentemente (evita reprocessamento caro)
+  const cachedSuggestions = await findInSelfHealingKnowledgeBase(config.catalog, schema, tableName);
+  if (cachedSuggestions) {
+    return cachedSuggestions as SelfHealingSuggestion[];
   }
 
   // 1. Obter metadados da tabela
@@ -126,6 +134,14 @@ export async function generateSelfHealingSuggestions(
         sqlCommand: sql
       });
     }
+
+    // FINOPS AI: Salvar no Knowledge Base para reutilização futura
+    await saveToSelfHealingKnowledgeBase({
+      tenantCatalog: config.catalog,
+      schemaName: schema,
+      tableName: tableName,
+      suggestions: suggestions
+    });
 
     return suggestions;
   } catch (error) {
