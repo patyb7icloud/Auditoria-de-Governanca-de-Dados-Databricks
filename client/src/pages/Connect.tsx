@@ -14,6 +14,7 @@ export default function Connect() {
   const [host, setHost] = useState("");
   const [token, setToken] = useState("");
   const [catalog, setCatalog] = useState("");
+  const [useVault, setUseVault] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
   const [testMessage, setTestMessage] = useState("");
@@ -61,15 +62,20 @@ export default function Connect() {
   });
 
   const handleTest = () => {
-    if (!host || !token || !catalog) {
+    if (!host || (!token && !useVault) || !catalog) {
       toast.error("Preencha todos os campos antes de testar a conexão");
       return;
     }
-    testConn.mutate({ host: host.trim(), token: token.trim(), catalog: catalog.trim() });
+    testConn.mutate({ 
+      host: host.trim(), 
+      token: useVault ? undefined : token.trim(), 
+      catalog: catalog.trim(),
+      useVault 
+    });
   };
 
   const handleStart = () => {
-    if (!host || !token || !catalog) {
+    if (!host || (!token && !useVault) || !catalog) {
       toast.error("Preencha todos os campos");
       return;
     }
@@ -77,7 +83,12 @@ export default function Connect() {
       toast.error("Teste a conexão antes de iniciar a auditoria");
       return;
     }
-    startAudit.mutate({ host: host.trim(), token: token.trim(), catalog: catalog.trim() });
+    startAudit.mutate({ 
+      host: host.trim(), 
+      token: useVault ? undefined : token.trim(), 
+      catalog: catalog.trim(),
+      useVault
+    });
   };
 
   const isRunning = startAudit.isPending;
@@ -120,32 +131,61 @@ export default function Connect() {
                 </p>
               </div>
 
-              {/* Token */}
-              <div className="space-y-2">
-                <Label htmlFor="token" className="text-sm font-semibold text-foreground">
-                  Token de Acesso Pessoal <span className="text-destructive">*</span>
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="token"
-                    type={showToken ? "text" : "password"}
-                    placeholder="dapi••••••••••••••••••••••••••••••••"
-                    value={token}
-                    onChange={(e) => { setToken(e.target.value); setTestStatus("idle"); }}
-                    className="bg-input border-border h-11 rounded-lg font-mono text-sm pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(!showToken)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+              {/* Token / Key Vault Toggle */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="token" className="text-sm font-semibold text-foreground">
+                    Token de Acesso Pessoal <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="useVault"
+                      checked={useVault}
+                      onChange={(e) => {
+                        setUseVault(e.target.checked);
+                        setTestStatus("idle");
+                      }}
+                      className="w-4 h-4 rounded border-border text-gold focus:ring-gold"
+                    />
+                    <Label htmlFor="useVault" className="text-xs text-muted-foreground cursor-pointer">
+                      Recuperar via Azure Key Vault
+                    </Label>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Info className="w-3 h-3" />
-                  User Settings → Developer → Access Tokens no Databricks
-                </p>
+                
+                {!useVault ? (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Input
+                        id="token"
+                        type={showToken ? "text" : "password"}
+                        placeholder="dapi••••••••••••••••••••••••••••••••"
+                        value={token}
+                        onChange={(e) => { setToken(e.target.value); setTestStatus("idle"); }}
+                        className="bg-input border-border h-11 rounded-lg font-mono text-sm pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken(!showToken)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Info className="w-3 h-3" />
+                      User Settings → Developer → Access Tokens no Databricks
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-lg bg-gold/5 border border-gold/20 text-xs text-gold/80 flex items-start gap-2">
+                    <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <p>
+                      O sistema tentará recuperar o segredo <strong>Databricks-AccessToken</strong> do Azure Key Vault configurado no ambiente.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Catalog */}
@@ -186,7 +226,7 @@ export default function Connect() {
                 <Button
                   variant="outline"
                   onClick={handleTest}
-                  disabled={testConn.isPending || isRunning || !host || !token || !catalog}
+                  disabled={testConn.isPending || isRunning || !host || (!token && !useVault) || !catalog}
                   className="flex-1 h-11 border-border hover:border-gold/40 hover:text-gold"
                 >
                   {testConn.isPending ? (

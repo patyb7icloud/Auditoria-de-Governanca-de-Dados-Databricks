@@ -14,6 +14,7 @@ import {
   computeGovernanceScore,
   GovernanceAnalysisData,
 } from "./databricks";
+import { getDatabricksToken } from "./keyvault";
 import {
   createAuditSession,
   updateAuditSession,
@@ -27,8 +28,9 @@ import { analyzeLGPDCompliance, detectPIIColumns, generateLGPDRecommendations } 
 
 const databricksConfigSchema = z.object({
   host: z.string().min(1),
-  token: z.string().min(1),
+  token: z.string().optional(),
   catalog: z.string().min(1),
+  useVault: z.boolean().optional(),
 });
 
 export const appRouter = router({
@@ -47,13 +49,21 @@ export const appRouter = router({
     testConnection: protectedProcedure
       .input(databricksConfigSchema)
       .mutation(async ({ input }) => {
-        return testConnection(input);
+        let config = { ...input };
+        if (input.useVault || !input.token) {
+          config.token = await getDatabricksToken();
+        }
+        return testConnection(config as any);
       }),
 
     // Start a full audit session
     startAudit: protectedProcedure
       .input(databricksConfigSchema)
       .mutation(async ({ input, ctx }) => {
+        let config = { ...input };
+        if (input.useVault || !input.token) {
+          config.token = await getDatabricksToken();
+        }
         const sessionId = await createAuditSession({
           userId: ctx.user.id,
           databricksHost: input.host,
@@ -80,7 +90,7 @@ export const appRouter = router({
         // Structure
         try {
           const t0 = Date.now();
-          const data = await analyzeStructure(input);
+          const data = await analyzeStructure(config as any);
           results.structure = data;
           await updateAnalysisResult(resultIds.structure, {
             status: "completed",
@@ -96,7 +106,7 @@ export const appRouter = router({
         // Glossary
         try {
           const t0 = Date.now();
-          const data = await analyzeGlossary(input);
+          const data = await analyzeGlossary(config as any);
           results.glossary = data;
           await updateAnalysisResult(resultIds.glossary, {
             status: "completed",
@@ -112,7 +122,7 @@ export const appRouter = router({
         // Tags
         try {
           const t0 = Date.now();
-          const data = await analyzeTags(input);
+          const data = await analyzeTags(config as any);
           results.tags = data;
           await updateAnalysisResult(resultIds.tags, {
             status: "completed",
@@ -127,7 +137,7 @@ export const appRouter = router({
         // Access
         try {
           const t0 = Date.now();
-          const data = await analyzeAccess(input);
+          const data = await analyzeAccess(config as any);
           results.access = data;
           await updateAnalysisResult(resultIds.access, {
             status: "completed",
@@ -142,7 +152,7 @@ export const appRouter = router({
         // Lineage
         try {
           const t0 = Date.now();
-          const data = await analyzeLineage(input);
+          const data = await analyzeLineage(config as any);
           results.lineage = data;
           await updateAnalysisResult(resultIds.lineage, {
             status: "completed",
@@ -157,7 +167,7 @@ export const appRouter = router({
         // Security
         try {
           const t0 = Date.now();
-          const data = await analyzeSecurity(input);
+          const data = await analyzeSecurity(config as any);
           results.security = data;
           await updateAnalysisResult(resultIds.security, {
             status: "completed",
