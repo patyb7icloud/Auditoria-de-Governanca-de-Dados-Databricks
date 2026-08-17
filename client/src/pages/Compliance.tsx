@@ -33,13 +33,21 @@ export default function LGPDCompliance() {
 
   // Fetch compliance analysis data from backend
   const analyzeComplianceMutation = trpc.lgpd.analyzeCompliance.useMutation();
-  const { data: complianceAnalysis, isLoading: isLoadingAnalysis } = analyzeComplianceMutation;
+  const { data: complianceAnalysis, isPending: isLoadingAnalysis } = analyzeComplianceMutation;
+  const recommendationsQuery = trpc.lgpd.generateRecommendations.useQuery(
+    { analysis: complianceAnalysis ?? {} },
+    { enabled: !!complianceAnalysis },
+  );
+  const { data: auditSessions = [] } = trpc.databricks.listSessions.useQuery(undefined, {
+    enabled: !!user,
+  });
   
   // Get stored Databricks config from session or localStorage
   const [databricksConfig, setDatabricksConfig] = useState<{
     host: string;
     token: string;
     catalog: string;
+    useVault?: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -55,104 +63,70 @@ export default function LGPDCompliance() {
   }, []);
 
   // Trigger analysis on mount or when config changes
-  const handleAnalyze = async () => {
+  const handleAnalyze = () => {
     if (!databricksConfig) {
       alert(t.compliance.configNotFound);
       return;
     }
-    
-    try {
+
+    analyzeComplianceMutation.mutate({
+      databricksHost: databricksConfig.host,
+      databricksToken: databricksConfig.token || undefined,
+      catalog: databricksConfig.catalog,
+      useVault: databricksConfig.useVault,
+    });
+  };
+
+  useEffect(() => {
+    if (databricksConfig && !complianceAnalysis && !isLoadingAnalysis) {
       analyzeComplianceMutation.mutate({
         databricksHost: databricksConfig.host,
-        databricksToken: databricksConfig.token,
+        databricksToken: databricksConfig.token || undefined,
         catalog: databricksConfig.catalog,
+        useVault: databricksConfig.useVault,
       });
-    } catch (error) {
-      console.error('Analysis failed:', error);
     }
-  };
+  }, [databricksConfig]);
 
-  // Use real data if available, otherwise mock data for demo
-  const complianceData = complianceAnalysis || {
-    score: 45,
-    riskLevel: 'high' as const,
-    criticalIssues: 3,
-    piiColumnsUntagged: 5,
-    retentionPolicies: 0,
-    encryptedTables: 2,
-    auditLogsEnabled: false,
-    dsrReadiness: {
-      export: false,
-      delete: false,
-      access: false,
-    },
-  };
+  // Normaliza LGPDAnalysis (estrutura aninhada do servidor) para estrutura flat usada no template.
+  // Sem uma análise executada, não exibe números inventados.
+  const complianceData = complianceAnalysis
+    ? {
+        score: complianceAnalysis.summary.complianceScore,
+        riskLevel: complianceAnalysis.summary.riskLevel,
+        criticalIssues: complianceAnalysis.summary.criticalIssues,
+        piiColumnsUntagged: complianceAnalysis.piiDetection.untaggedPiiRisk,
+        retentionPolicies: complianceAnalysis.retention.policies.filter((p) => p.assessment === 'defined').length,
+        encryptedTables: complianceAnalysis.encryption.encryptedTables,
+        auditLogsEnabled: complianceAnalysis.audit.accessLogsEnabled,
+        dsrReadiness: {
+          export: complianceAnalysis.dsr.readyForExport,
+          delete: complianceAnalysis.dsr.readyForDeletion,
+          access: complianceAnalysis.dsr.readyForDSR,
+        },
+      }
+    : null;
 
-  const mockRecommendations = [
-    {
-      id: 'pii-tagging',
-      priority: 'critical' as const,
-      category: 'pii' as const,
-      title: t.recommendations.piiTagging,
-      description: t.recommendations.piiDescription,
-      impact: t.recommendations.piiImpact,
-      estimatedEffort: 'quick' as const,
-      action: t.recommendations.piiAction,
-      relatedAssets: ['customers.email', 'customers.cpf', 'orders.birth_date'],
-    },
-    {
-      id: 'retention-policies',
-      priority: 'critical' as const,
-      category: 'retention' as const,
-      title: t.recommendations.retentionPolicies,
-      description: t.recommendations.retentionDescription,
-      impact: t.recommendations.retentionImpact,
-      estimatedEffort: 'medium' as const,
-      action: t.recommendations.retentionAction,
-      relatedAssets: ['customers', 'orders', 'transactions', 'logs'],
-    },
-    {
-      id: 'audit-logs',
-      priority: 'high' as const,
-      category: 'audit' as const,
-      title: t.recommendations.auditLogs,
-      description: t.recommendations.auditDescription,
-      impact: t.recommendations.auditImpact,
-      estimatedEffort: 'quick' as const,
-      action: t.recommendations.auditAction,
-    },
-    {
-      id: 'encryption',
-      priority: 'high' as const,
-      category: 'encryption' as const,
-      title: t.recommendations.encryption,
-      description: t.recommendations.encryptionDescription,
-      impact: t.recommendations.encryptionImpact,
-      estimatedEffort: 'complex' as const,
-      action: t.recommendations.encryptionAction,
-      relatedAssets: ['customers', 'orders', 'payments', 'users'],
-    },
-    {
-      id: 'dsr-workflow',
-      priority: 'high' as const,
-      category: 'access' as const,
-      title: t.recommendations.dsrWorkflow,
-      description: t.recommendations.dsrDescription,
-      impact: t.recommendations.dsrImpact,
-      estimatedEffort: 'complex' as const,
-      action: t.recommendations.dsrAction,
-    },
-    {
-      id: 'documentation',
-      priority: 'medium' as const,
-      category: 'documentation' as const,
-      title: t.recommendations.documentation,
-      description: t.recommendations.docDescription,
-      impact: t.recommendations.docImpact,
-      estimatedEffort: 'medium' as const,
-      action: t.recommendations.docAction,
-    },
-  ];
+  const recommendations = (recommendationsQuery.data ?? []).map((recommendation, index) => ({
+    id: `lgpd-${index}`,
+    priority: recommendation.priority,
+    category: recommendation.priority === 'critical' ? 'pii' as const : 'documentation' as const,
+    title: recommendation.action,
+    description: recommendation.action,
+    impact: language === 'pt' ? 'Recomendação derivada da análise atual do catálogo.' : 'Recommendation derived from the current catalog analysis.',
+    estimatedEffort: recommendation.priority === 'critical' ? 'quick' as const : 'medium' as const,
+    action: recommendation.action,
+  }));
+
+  const scoreHistory = auditSessions
+    .filter((session) => session.governanceScore !== null && session.governanceScore !== undefined)
+    .slice(0, 4)
+    .map((session) => ({
+      date: new Date(session.createdAt).toLocaleDateString(language === 'pt' ? 'pt-BR' : 'en-US'),
+      score: Math.round(session.governanceScore ?? 0),
+    }));
+
+  const piiData = complianceAnalysis?.piiDetection;
 
   return (
     <div className="space-y-6 p-6">
@@ -219,11 +193,11 @@ export default function LGPDCompliance() {
           </div>
           <div>
             <div className="text-4xl font-bold text-gray-900 dark:text-white">
-              {complianceData.score}
+              {complianceData?.score ?? '—'}
               <span className="text-lg text-gray-600">{t.compliance.score}</span>
             </div>
             <div className="text-sm font-semibold text-orange-600">
-              {t.compliance.risk.toUpperCase()} {complianceData.riskLevel ? complianceData.riskLevel.toUpperCase() : 'DESCONHECIDO'}
+              {t.compliance.risk.toUpperCase()} {complianceData?.riskLevel ? complianceData.riskLevel.toUpperCase() : 'NÃO ANALISADO'}
             </div>
           </div>
           <Button 
@@ -247,11 +221,12 @@ export default function LGPDCompliance() {
       </div>
 
       {/* Critical Alert */}
-      {complianceData.criticalIssues > 0 && (
+      {complianceData && complianceData.criticalIssues > 0 && (
         <Alert className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800">
-            <strong>{complianceData.criticalIssues} {t.compliance.criticalIssues}</strong> {t.compliance.criticalIssuesDesc}
+                            <strong>{complianceData.criticalIssues} {t.compliance.criticalIssues}</strong> {t.compliance.criticalIssuesDesc}
+
           </AlertDescription>
         </Alert>
       )}
@@ -262,10 +237,10 @@ export default function LGPDCompliance() {
           <TabsTrigger value="overview">{t.compliance.tabs.overview}</TabsTrigger>
           <TabsTrigger value="recommendations">
             {t.compliance.tabs.recommendations}
-            {mockRecommendations.length > 0 && (
+            {recommendations.length > 0 && (
               <span className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
                 {
-                  mockRecommendations.filter((r) => r.priority === 'critical')
+                  recommendations.filter((r) => r.priority === 'critical')
                     .length
                 }
               </span>
@@ -277,7 +252,7 @@ export default function LGPDCompliance() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <LGPDCompliancePanel
+          {complianceData ? <LGPDCompliancePanel
             score={complianceData.score}
             riskLevel={complianceData.riskLevel}
             criticalIssues={complianceData.criticalIssues}
@@ -286,9 +261,16 @@ export default function LGPDCompliance() {
             encryptedTables={complianceData.encryptedTables}
             auditLogsEnabled={complianceData.auditLogsEnabled}
             dsrReadiness={complianceData.dsrReadiness}
-            recommendations={mockRecommendations.slice(0, 3)}
+            recommendations={recommendations.slice(0, 3)}
             language={language}
-          />
+          /> : (
+            <Alert className="border-blue-200 bg-blue-50">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                {databricksConfig ? t.compliance.analyzeNow : t.compliance.configNotFound}
+              </AlertDescription>
+            </Alert>
+          )}
         </TabsContent>
 
         {/* Recommendations Tab */}
@@ -301,10 +283,10 @@ export default function LGPDCompliance() {
               </h2>
             </div>
             <p className="text-sm text-gray-600 mb-6">
-              {mockRecommendations.length} {t.compliance.recommendationsCount}
+              {recommendations.length} {t.compliance.recommendationsCount}
             </p>
             <GovernanceRecommendations
-              recommendations={mockRecommendations}
+              recommendations={recommendations}
               onImplement={(rec) =>
                 console.log('Implementando:', rec.title)
               }
@@ -319,48 +301,53 @@ export default function LGPDCompliance() {
               {t.compliance.piiTitle}
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <Card className="p-4 bg-blue-50">
-                <p className="text-sm text-gray-600 mb-1">{t.compliance.totalColumns}</p>
-                <p className="text-3xl font-bold text-blue-600">128</p>
-              </Card>
-              <Card className="p-4 bg-orange-50">
-                <p className="text-sm text-gray-600 mb-1">{t.compliance.piiIdentified}</p>
-                <p className="text-3xl font-bold text-orange-600">18</p>
-              </Card>
-              <Card className="p-4 bg-red-50">
-                <p className="text-sm text-gray-600 mb-1">{t.compliance.notTagged}</p>
-                <p className="text-3xl font-bold text-red-600">5</p>
-              </Card>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="font-semibold text-gray-900">
-                {t.compliance.categoriesDetected}
-              </h3>
-              {[
-                { name: t.compliance.piiCategories.email, count: 3, tagged: 3 },
-                { name: t.compliance.piiCategories.cpf, count: 2, tagged: 0 },
-                { name: t.compliance.piiCategories.birthDate, count: 4, tagged: 4 },
-                { name: t.compliance.piiCategories.phone, count: 5, tagged: 5 },
-                { name: t.compliance.piiCategories.address, count: 4, tagged: 1 },
-              ].map((cat) => (
-                <div key={cat.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{cat.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {cat.tagged}/{cat.count} {t.compliance.tagged}
-                    </p>
-                  </div>
-                  <div className="w-24 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-green-600 h-2 rounded-full"
-                      style={{ width: `${(cat.tagged / cat.count) * 100}%` }}
-                    />
-                  </div>
+            {piiData ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <Card className="p-4 bg-blue-50">
+                    <p className="text-sm text-gray-600 mb-1">{t.compliance.totalColumns}</p>
+                    <p className="text-3xl font-bold text-blue-600">{piiData.totalColumns}</p>
+                  </Card>
+                  <Card className="p-4 bg-orange-50">
+                    <p className="text-sm text-gray-600 mb-1">{t.compliance.piiIdentified}</p>
+                    <p className="text-3xl font-bold text-orange-600">{piiData.piiColumnsIdentified}</p>
+                  </Card>
+                  <Card className="p-4 bg-red-50">
+                    <p className="text-sm text-gray-600 mb-1">{t.compliance.notTagged}</p>
+                    <p className="text-3xl font-bold text-red-600">{piiData.untaggedPiiRisk}</p>
+                  </Card>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-900">
+                    {t.compliance.categoriesDetected}
+                  </h3>
+                  {piiData.categories.map((cat) => (
+                    <div key={cat.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">{cat.name}</p>
+                        <p className="text-sm text-gray-600">
+                          {cat.tagged}/{cat.count} {t.compliance.tagged}
+                        </p>
+                      </div>
+                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-green-600 h-2 rounded-full"
+                          style={{ width: `${cat.count > 0 ? (cat.tagged / cat.count) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <Alert className="border-blue-200 bg-blue-50">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  {databricksConfig ? t.compliance.analyzeNow : t.compliance.configNotFound}
+                </AlertDescription>
+              </Alert>
+            )}
           </Card>
         </TabsContent>
 
@@ -372,13 +359,8 @@ export default function LGPDCompliance() {
                 {t.compliance.scoreHistory}
               </h3>
               <div className="space-y-2">
-                {[
-                  { date: t.compliance.today, score: 45 },
-                  { date: t.compliance.daysAgo(7), score: 40 },
-                  { date: t.compliance.daysAgo(14), score: 35 },
-                  { date: t.compliance.daysAgo(30), score: 30 },
-                ].map((entry) => (
-                  <div key={entry.date} className="flex justify-between items-center">
+                {scoreHistory.length > 0 ? scoreHistory.map((entry) => (
+                  <div key={`${entry.date}-${entry.score}`} className="flex justify-between items-center">
                     <p className="text-sm text-gray-600">{entry.date}</p>
                     <div className="flex items-center gap-2">
                       <div className="w-20 bg-gray-200 rounded-full h-2">
@@ -392,7 +374,9 @@ export default function LGPDCompliance() {
                       </p>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-sm text-gray-600">{databricksConfig ? t.compliance.analyzeNow : t.compliance.configNotFound}</p>
+                )}
               </div>
             </Card>
 
@@ -401,12 +385,14 @@ export default function LGPDCompliance() {
                 {t.compliance.nextSteps}
               </h3>
               <div className="space-y-2">
-                {t.compliance.steps.map((step, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+                {recommendations.length > 0 ? recommendations.map((recommendation) => (
+                  <div key={recommendation.id} className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-gray-400" />
-                    <p className="text-sm text-gray-600">{step}</p>
+                    <p className="text-sm text-gray-600">{recommendation.action}</p>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-sm text-gray-600">{databricksConfig ? t.compliance.analyzeNow : t.compliance.configNotFound}</p>
+                )}
               </div>
             </Card>
           </div>
@@ -417,9 +403,11 @@ export default function LGPDCompliance() {
               {t.compliance.goalDesc}
             </p>
             <div className="w-full bg-green-200 rounded-full h-3">
-              <div className="bg-green-600 h-3 rounded-full" style={{ width: '45%' }} />
+              <div className="bg-green-600 h-3 rounded-full" style={{ width: `${complianceData?.score ?? 0}%` }} />
             </div>
-            <p className="text-xs text-green-700 mt-2">45% do caminho</p>
+            <p className="text-xs text-green-700 mt-2">
+              {complianceData ? `${complianceData.score}%` : 'N/D'} {language === 'pt' ? 'do caminho' : 'of the way'}
+            </p>
           </Card>
         </TabsContent>
       </Tabs>

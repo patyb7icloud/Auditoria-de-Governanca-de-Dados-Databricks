@@ -15,6 +15,12 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { cn } from "@/lib/utils";
+import { CopilotChat } from "@/components/CopilotChat";
+import { FinOpsPanel } from "@/components/FinOpsPanel";
+import { SelfHealingPanel } from "@/components/SelfHealingPanel";
+import { SecOpsPanel } from "@/components/SecOpsPanel";
+import { FinOpsAIPanel } from "@/components/FinOpsAIPanel";
+import { MonitoringPanel } from "@/components/MonitoringPanel";
 
 const ANALYSIS_META = [
   { type: "structure", label: "Mapeamento de Estrutura", icon: Database, color: "text-info" },
@@ -130,6 +136,9 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="min-h-screen p-8 space-y-8">
+        {/* SecOps Alert (Real-time) */}
+        <SecOpsPanel />
+
         {/* Header */}
         <div className="flex items-start justify-between animate-fade-in-up">
           <div>
@@ -180,7 +189,7 @@ export default function Dashboard() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Score de Governança</p>
             <ScoreRing score={score} />
             <div className="text-center">
-              <ScoreLabel score={score} />
+              <ScoreLabel score={score} language={language} />
               <p className="text-xs text-muted-foreground mt-1">Maturidade geral</p>
             </div>
           </div>
@@ -222,7 +231,12 @@ export default function Dashboard() {
               let detail = "";
               if (type === "structure" && rd) detail = `${rd.summary?.totalCatalogs ?? 0} catálogos · ${rd.summary?.totalSchemas ?? 0} schemas · ${rd.summary?.totalTables ?? 0} tabelas`;
               if (type === "glossary" && rd) detail = `${rd.summary?.tableDocCoverage ?? 0}% tabelas · ${rd.summary?.columnDocCoverage ?? 0}% colunas documentadas`;
-              if (type === "tags" && rd) detail = `${rd.summary?.totalTableTags ?? 0} tags em tabelas · ${rd.summary?.uniqueTags ?? 0} tags únicas`;
+              if (type === "tags" && rd) {
+                const tableTags = rd.summary?.totalTableTags ?? 0;
+                const columnTags = rd.summary?.totalColumnTags ?? 0;
+                const totalTags = tableTags + columnTags;
+                detail = `${totalTags} tags aplicadas · ${rd.summary?.tablesWithTags ?? 0} ativos cobertos · ${rd.summary?.uniqueTags ?? 0} tags únicas`;
+              }
               if (type === "access" && rd) detail = `${rd.summary?.totalGrants ?? 0} grants · ${rd.summary?.uniqueGrantees ?? 0} grantees`;
               if (type === "lineage" && rd) detail = `${rd.summary?.totalEdges ?? 0} relações · ${rd.summary?.uniqueSources ?? 0} origens`;
               if (type === "security" && rd) detail = `${rd.summary?.totalFunctions ?? 0} funções · ${rd.summary?.rowFilterCount ?? 0} filtros de linha`;
@@ -258,6 +272,19 @@ export default function Dashboard() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Pilares Revolucionários e Monitoramento */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up">
+          <div className="lg:col-span-2 space-y-6">
+            <MonitoringPanel tenantCatalog={session.targetCatalog} />
+            <FinOpsAIPanel />
+            <SelfHealingPanel schema="default" tableName="customers" />
+            <FinOpsPanel />
+          </div>
+          <div className="lg:col-span-1">
+            <CopilotChat host={session.databricksHost} catalog={session.targetCatalog} />
           </div>
         </div>
 

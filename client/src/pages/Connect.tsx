@@ -2,6 +2,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -14,7 +15,7 @@ export default function Connect() {
   const [host, setHost] = useState("");
   const [token, setToken] = useState("");
   const [catalog, setCatalog] = useState("");
-  const [useVault, setUseVault] = useState(false);
+  const [useVault, setUseVault] = useState(true);
   const [showToken, setShowToken] = useState(false);
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
   const [testMessage, setTestMessage] = useState("");
@@ -30,6 +31,7 @@ export default function Connect() {
           host: host.trim(),
           token: token.trim(),
           catalog: catalog.trim(),
+          useVault,
         }));
         toast.success("Conexão estabelecida com sucesso!");
       } else {
@@ -52,6 +54,7 @@ export default function Connect() {
         host: host.trim(),
         token: token.trim(),
         catalog: catalog.trim(),
+        useVault,
       }));
       toast.success("Auditoria concluída!");
       navigate(`/dashboard/${data.sessionId}`);
@@ -62,20 +65,20 @@ export default function Connect() {
   });
 
   const handleTest = () => {
-    if (!host || (!token && !useVault) || !catalog) {
+    if (!host || !catalog || (!useVault && !token)) {
       toast.error("Preencha todos os campos antes de testar a conexão");
       return;
     }
-    testConn.mutate({ 
-      host: host.trim(), 
-      token: useVault ? undefined : token.trim(), 
+    testConn.mutate({
+      host: host.trim(),
+      token: useVault ? undefined : token.trim(),
       catalog: catalog.trim(),
-      useVault 
+      useVault,
     });
   };
 
   const handleStart = () => {
-    if (!host || (!token && !useVault) || !catalog) {
+    if (!host || !catalog || (!useVault && !token)) {
       toast.error("Preencha todos os campos");
       return;
     }
@@ -83,11 +86,11 @@ export default function Connect() {
       toast.error("Teste a conexão antes de iniciar a auditoria");
       return;
     }
-    startAudit.mutate({ 
-      host: host.trim(), 
-      token: useVault ? undefined : token.trim(), 
+    startAudit.mutate({
+      host: host.trim(),
+      token: useVault ? undefined : token.trim(),
       catalog: catalog.trim(),
-      useVault
+      useVault,
     });
   };
 
@@ -134,28 +137,24 @@ export default function Connect() {
               {/* Token / Key Vault Toggle */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="token" className="text-sm font-semibold text-foreground">
-                    Token de Acesso Pessoal <span className="text-destructive">*</span>
+                  <Label htmlFor="use-vault" className="text-sm font-semibold text-foreground">
+                    Usar Token do Azure Key Vault
                   </Label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="useVault"
-                      checked={useVault}
-                      onChange={(e) => {
-                        setUseVault(e.target.checked);
-                        setTestStatus("idle");
-                      }}
-                      className="w-4 h-4 rounded border-border text-gold focus:ring-gold"
-                    />
-                    <Label htmlFor="useVault" className="text-xs text-muted-foreground cursor-pointer">
-                      Recuperar via Azure Key Vault
-                    </Label>
-                  </div>
+                  <Switch
+                    id="use-vault"
+                    checked={useVault}
+                    onCheckedChange={(checked) => {
+                      setUseVault(checked);
+                      setTestStatus("idle");
+                    }}
+                  />
                 </div>
-                
+
                 {!useVault ? (
                   <div className="space-y-2">
+                    <Label htmlFor="token" className="text-sm font-semibold text-foreground">
+                      Token de Acesso Pessoal <span className="text-destructive">*</span>
+                    </Label>
                     <div className="relative">
                       <Input
                         id="token"
@@ -226,7 +225,7 @@ export default function Connect() {
                 <Button
                   variant="outline"
                   onClick={handleTest}
-                  disabled={testConn.isPending || isRunning || !host || (!token && !useVault) || !catalog}
+                  disabled={testConn.isPending || isRunning || !host || !catalog || (!useVault && !token)}
                   className="flex-1 h-11 border-border hover:border-gold/40 hover:text-gold"
                 >
                   {testConn.isPending ? (

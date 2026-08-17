@@ -6,6 +6,13 @@
       "when": 1782226010777,
       "tag": "0000_dizzy_vargas",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1750744800000,
+      "tag": "0002_knowledge_base",
+      "breakpoints": true
     }
   ]
 }

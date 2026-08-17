@@ -24,7 +24,11 @@ import {
   updateAnalysisResult,
   getAnalysisResultsBySession,
 } from "./db";
+import { getDatabricksToken } from "./keyvault";
 import { analyzeLGPDCompliance, detectPIIColumns, generateLGPDRecommendations } from "./lgpd-compliance";
+import { generateSelfHealingSuggestions, applySelfHealing } from "./self-healing";
+import { analyzeDataROI } from "./finops";
+import { askCopilot, checkSecurityAnomalies } from "./copilot";
 
 const databricksConfigSchema = z.object({
   host: z.string().min(1),
@@ -64,10 +68,11 @@ export const appRouter = router({
         if (input.useVault || !input.token) {
           config.token = await getDatabricksToken();
         }
+
         const sessionId = await createAuditSession({
           userId: ctx.user.id,
-          databricksHost: input.host,
-          targetCatalog: input.catalog,
+          databricksHost: config.host,
+          targetCatalog: config.catalog,
           status: "running",
         });
 
@@ -211,7 +216,7 @@ export const appRouter = router({
           totalSchemas: results.structure?.summary.totalSchemas ?? 0,
           totalTables: (results.structure?.summary.totalTables ?? 0) + (results.structure?.summary.totalViews ?? 0),
           docCoverage: results.glossary?.summary.tableDocCoverage ?? 0,
-          tagCoverage: results.tags && results.structure ? Math.round((results.tags.summary.tablesWithTags / Math.max(1, (results.structure.summary.totalTables + results.structure.summary.totalViews))) * 100) : 0,
+          tagCoverage: results.tags && results.structure ? Math.round(((results.tags.summary.tablesWithTags ?? 0) / Math.max(1, (results.structure.summary.totalTables + results.structure.summary.totalViews))) * 100) : 0,
           errorMessage: hasErrors ? JSON.stringify(errors) : undefined,
         });
 
@@ -285,13 +290,13 @@ export const appRouter = router({
           security: "Segurança Dinâmica",
         };
 
-        const checklistA = analysesA.map((a) => ({
+        const checklistA = (analysesA ?? []).map((a) => ({
           type: a.analysisType,
           label: analysisLabels[a.analysisType] ?? a.analysisType,
           status: a.status,
           score: a.score,
         }));
-        const checklistB = analysesB.map((a) => ({
+        const checklistB = (analysesB ?? []).map((a) => ({
           type: a.analysisType,
           label: analysisLabels[a.analysisType] ?? a.analysisType,
           status: a.status,
@@ -331,7 +336,7 @@ export const appRouter = router({
             docCoverage: session.docCoverage,
             tagCoverage: session.tagCoverage,
           },
-          analyses: analyses.map((a) => ({
+          analyses: (analyses ?? []).map((a) => ({
             type: a.analysisType,
             status: a.status,
             score: a.score,
@@ -346,20 +351,110 @@ export const appRouter = router({
       }),
   }),
 
+  // Revolucionário: Auto-Cura (Self-Healing)
+  selfHealing: router({
+    analyzeTable: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+        schema: z.string(),
+        tableName: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        return generateSelfHealingSuggestions(input, input.schema, input.tableName);
+      }),
+    applyFixes: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+        sqlCommands: z.array(z.string()),
+      }))
+      .mutation(async ({ input }) => {
+        return applySelfHealing(input, input.sqlCommands);
+      }),
+  }),
+
+  // Revolucionário: FinOps (Data ROI)
+  finops: router({
+    analyzeROI: protectedProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return analyzeDataROI(input);
+      }),
+  }),
+
+  // Revolucionário: Copiloto e SecOps
+  copilot: router({
+    ask: publicProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+        question: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        return askCopilot(input, input.question);
+      }),
+    checkAnomalies: publicProcedure
+      .input(z.object({
+        host: z.string(),
+        token: z.string(),
+        catalog: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return checkSecurityAnomalies(input);
+      }),
+  }),
+
+  // Monitoramento Semanal do Copiloto
+  monitoring: router({
+    getWeeklyMetrics: protectedProcedure
+      .input(z.object({ tenantCatalog: z.string() }))
+      .query(async ({ input }) => {
+        const { getLatestWeeklyMetrics } = await import("./monitoring");
+        return await getLatestWeeklyMetrics(input.tenantCatalog);
+      }),
+
+    generateWeeklyMetrics: protectedProcedure
+      .input(z.object({ tenantCatalog: z.string() }))
+      .mutation(async ({ input }) => {
+        const { generateWeeklyMetrics } = await import("./monitoring");
+        return await generateWeeklyMetrics(input.tenantCatalog);
+      }),
+
+    setupWeeklyJob: protectedProcedure
+      .input(z.object({ tenantCatalog: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { setupWeeklyMonitoringJob } = await import("./setup-monitoring-job");
+        // Em WebDev, ctx.req.cookies.app_session_id contém a sessão
+        const sessionToken = ctx.req.cookies?.app_session_id || "";
+        return await setupWeeklyMonitoringJob(input.tenantCatalog, sessionToken);
+      }),
+  }),
+
   // LGPD/GDPR Compliance Router
   lgpd: router({
     analyzeCompliance: protectedProcedure
       .input(z.object({
         databricksHost: z.string(),
-        databricksToken: z.string(),
+        databricksToken: z.string().optional(),
         catalog: z.string(),
+        useVault: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        // TODO: Implement real analysis with Databricks queries
-        // For now, return mock data with structure matching real analysis
+        const token = input.useVault || !input.databricksToken
+          ? await getDatabricksToken()
+          : input.databricksToken;
+
         return analyzeLGPDCompliance({
-          databricksHost: input.databricksHost,
-          databricksToken: input.databricksToken,
+          host: input.databricksHost,
+          token,
           catalog: input.catalog,
         });
       }),
@@ -370,10 +465,10 @@ export const appRouter = router({
           name: z.string(),
           type: z.string(),
         })),
-        sampleData: z.record(z.any()).optional(),
+        sampleData: z.array(z.record(z.string(), z.unknown())).optional(),
       }))
       .query(({ input }) => {
-        return detectPIIColumns(input.columns, input.sampleData);
+        return detectPIIColumns(input.columns, input.sampleData as Record<string, unknown>[] | undefined);
       }),
 
     generateRecommendations: protectedProcedure

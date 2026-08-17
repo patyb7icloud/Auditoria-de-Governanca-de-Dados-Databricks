@@ -43,19 +43,42 @@ export type HeartbeatJobInfo = {
 const SERVICE = "webdevtoken.v1.WebDevService";
 
 const buildEndpoint = (rpc: string): string => {
-  if (!ENV.forgeApiUrl) {
+  const configuredBaseUrl =
+    ENV.heartbeatApiUrl?.trim() || ENV.forgeApiUrl?.trim() || "";
+
+  if (!configuredBaseUrl) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
-      message: "Heartbeat service URL is not configured (BUILT_IN_FORGE_API_URL).",
+      message:
+        "Heartbeat service URL is not configured (set BUILT_IN_HEARTBEAT_API_URL or BUILT_IN_FORGE_API_URL).",
     });
   }
+
+  let parsedBase: URL;
+  try {
+    parsedBase = new URL(configuredBaseUrl);
+  } catch {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Heartbeat service URL is invalid. Check BUILT_IN_HEARTBEAT_API_URL.",
+    });
+  }
+
+  if (parsedBase.hostname === "api.openai.com") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Heartbeat não é suportado em api.openai.com. Configure BUILT_IN_HEARTBEAT_API_URL com um endpoint compatível com WebDevService.",
+    });
+  }
+
   if (!ENV.forgeApiKey) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Heartbeat service API key is not configured (BUILT_IN_FORGE_API_KEY).",
     });
   }
-  const baseUrl = ENV.forgeApiUrl;
+  const baseUrl = parsedBase.toString();
   const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   return new URL(`${SERVICE}/${rpc}`, normalizedBase).toString();
 };

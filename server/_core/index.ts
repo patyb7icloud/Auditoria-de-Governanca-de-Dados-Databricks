@@ -38,6 +38,12 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerPdfRoute(app);
+
+  // Registro dinâmico do endpoint de métricas semanais
+  app.post("/api/scheduled/weekly-metrics", async (req, res) => {
+    const handler = await import("../api/scheduled/weekly-metrics");
+    return handler.default(req, res);
+  });
   // tRPC API
   app.use(
     "/api/trpc",

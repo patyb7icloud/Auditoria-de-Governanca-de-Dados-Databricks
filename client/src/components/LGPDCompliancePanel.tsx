@@ -12,12 +12,12 @@ interface LGPDCompliancePanelProps {
   criticalIssues: number;
   piiColumnsUntagged: number;
   retentionPolicies: number;
-  encryptedTables: number;
-  auditLogsEnabled: boolean;
+  encryptedTables: number | null;
+  auditLogsEnabled: boolean | null;
   dsrReadiness: {
-    export: boolean;
-    delete: boolean;
-    access: boolean;
+    export: boolean | null;
+    delete: boolean | null;
+    access: boolean | null;
   };
   recommendations: Array<{
     priority: 'critical' | 'high' | 'medium';
@@ -49,6 +49,7 @@ export function LGPDCompliancePanel({
 
   // Provide safe defaults for recommendations if undefined
   const safeRecommendations = recommendations || [];
+  const displayNumber = (value: number | null) => value === null ? 'N/D' : value;
 
   const getRiskColor = (level: string) => {
     switch (level) {
@@ -94,11 +95,11 @@ export function LGPDCompliancePanel({
   const checklistItems = [
     { label: language === 'pt' ? 'Identificação e Etiquetagem de PII' : 'PII Identification & Tagging', done: piiColumnsUntagged === 0 },
     { label: language === 'pt' ? 'Políticas de Retenção de Dados' : 'Data Retention Policies', done: retentionPolicies > 0 },
-    { label: language === 'pt' ? 'Criptografia em Repouso' : 'Encryption at Rest', done: encryptedTables > 0 },
-    { label: language === 'pt' ? 'Logs de Auditoria Habilitados' : 'Audit Logging Enabled', done: auditLogsEnabled },
-    { label: language === 'pt' ? 'Exportação de Dados Pronta (DSR)' : 'Data Export Ready (DSR)', done: safeDsrReadiness.export },
-    { label: language === 'pt' ? 'Exclusão de Dados Pronta (DSR)' : 'Data Deletion Ready (DSR)', done: safeDsrReadiness.delete },
-    { label: language === 'pt' ? 'Trilha de Auditoria de Controle de Acesso' : 'Access Control Audit Trail', done: safeDsrReadiness.access },
+    { label: language === 'pt' ? 'Criptografia em Repouso' : 'Encryption at Rest', done: encryptedTables !== null && encryptedTables > 0 },
+    { label: language === 'pt' ? 'Logs de Auditoria Habilitados' : 'Audit Logging Enabled', done: auditLogsEnabled === true },
+    { label: language === 'pt' ? 'Exportação de Dados Pronta (DSR)' : 'Data Export Ready (DSR)', done: safeDsrReadiness.export === true },
+    { label: language === 'pt' ? 'Exclusão de Dados Pronta (DSR)' : 'Data Deletion Ready (DSR)', done: safeDsrReadiness.delete === true },
+    { label: language === 'pt' ? 'Trilha de Auditoria de Controle de Acesso' : 'Access Control Audit Trail', done: safeDsrReadiness.access === true },
   ];
 
   return (
@@ -191,15 +192,19 @@ export function LGPDCompliancePanel({
           <div className="space-y-2">
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {encryptedTables}
+                {displayNumber(encryptedTables)}
               </p>
               <p className="text-xs text-gray-600">{language === 'pt' ? 'Tabelas criptografadas' : 'Tables encrypted'}</p>
             </div>
-            {encryptedTables > 0 && (
+            {encryptedTables === null ? (
+              <Badge variant="outline" className="w-full justify-center">
+                {language === 'pt' ? 'Não verificado' : 'Not verified'}
+              </Badge>
+            ) : encryptedTables > 0 ? (
               <Badge variant="outline" className="w-full justify-center bg-green-50">
                 {language === 'pt' ? 'Habilitado' : 'Enabled'}
               </Badge>
-            )}
+            ) : null}
           </div>
         </Card>
 
@@ -212,15 +217,15 @@ export function LGPDCompliancePanel({
           <div className="space-y-2">
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {auditLogsEnabled ? 'ON' : 'OFF'}
+                {auditLogsEnabled === null ? 'N/D' : auditLogsEnabled ? 'ON' : 'OFF'}
               </p>
               <p className="text-xs text-gray-600">{language === 'pt' ? 'Registro de acesso' : 'Access logging'}</p>
             </div>
             <Badge
-              variant={auditLogsEnabled ? 'default' : 'outline'}
+              variant={auditLogsEnabled === true ? 'default' : 'outline'}
               className="w-full justify-center"
             >
-              {auditLogsEnabled ? (language === 'pt' ? 'Ativo' : 'Active') : (language === 'pt' ? 'Desabilitado' : 'Disabled')}
+              {auditLogsEnabled === null ? (language === 'pt' ? 'Não verificado' : 'Not verified') : auditLogsEnabled ? (language === 'pt' ? 'Ativo' : 'Active') : (language === 'pt' ? 'Desabilitado' : 'Disabled')}
             </Badge>
           </div>
         </Card>
@@ -239,13 +244,13 @@ export function LGPDCompliancePanel({
             <div
               key={right}
               className={`p-3 rounded-lg border-2 ${
-                safeDsrReadiness[right as keyof typeof safeDsrReadiness]
+                safeDsrReadiness[right as keyof typeof safeDsrReadiness] === true
                   ? 'border-green-200 bg-green-50'
                   : 'border-gray-200 bg-gray-50'
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                {safeDsrReadiness[right as keyof typeof safeDsrReadiness] ? (
+                {safeDsrReadiness[right as keyof typeof safeDsrReadiness] === true ? (
                   <CheckCircle className="h-4 w-4 text-green-600" />
                 ) : (
                   <AlertCircle className="h-4 w-4 text-gray-400" />
@@ -255,9 +260,11 @@ export function LGPDCompliancePanel({
                 </p>
               </div>
               <p className="text-xs text-gray-600">
-                {safeDsrReadiness[right as keyof typeof safeDsrReadiness]
-                  ? dsrStatusLabels.implemented
-                  : dsrStatusLabels.notReady}
+                {safeDsrReadiness[right as keyof typeof safeDsrReadiness] === null
+                  ? (language === 'pt' ? 'Não verificado' : 'Not verified')
+                  : safeDsrReadiness[right as keyof typeof safeDsrReadiness]
+                    ? dsrStatusLabels.implemented
+                    : dsrStatusLabels.notReady}
               </p>
             </div>
           ))}

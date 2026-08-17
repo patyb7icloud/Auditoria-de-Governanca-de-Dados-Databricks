@@ -27,7 +27,7 @@ const mockData: GovernanceAnalysisData = {
     tableTags: [],
     columnTags: [],
     tagDistribution: [],
-    summary: { totalTableTags: 0, totalColumnTags: 0, uniqueTags: 0, sensitiveDataTagged: 0 },
+    summary: { totalTableTags: 0, totalColumnTags: 0, uniqueTags: 0, tablesWithTags: 0, sensitiveDataTagged: 0 },
   },
   access: {
     tablePrivileges: [{ grantor: "admin", grantee: "analyst", table_catalog: "main", table_schema: "default", table_name: "orders", privilege_type: "SELECT" }],
@@ -79,6 +79,25 @@ describe("computeGovernanceScore", () => {
     expect(hasSecGap).toBe(true);
   });
 
+  it("counts column-only tags as tagged asset coverage", () => {
+    const columnOnlyTaggedData: GovernanceAnalysisData = {
+      ...mockData,
+      tags: {
+        ...mockData.tags,
+        columnTags: [
+          { catalog_name: "main", schema_name: "default", table_name: "orders", column_name: "email", tag_name: "pii" },
+          { catalog_name: "main", schema_name: "default", table_name: "orders", column_name: "cpf", tag_name: "sensitive" },
+        ],
+        summary: { totalTableTags: 0, totalColumnTags: 2, uniqueTags: 2, tablesWithTags: 1, sensitiveDataTagged: 2 },
+      },
+    };
+
+    const result = computeGovernanceScore(columnOnlyTaggedData);
+
+    expect(result.breakdown.classification).toBe(10);
+    expect(result.gaps.some((gap) => gap.includes("0% dos ativos"))).toBe(false);
+  });
+
   it("returns recommendations array", () => {
     const result = computeGovernanceScore(mockData);
     expect(Array.isArray(result.recommendations)).toBe(true);
@@ -103,7 +122,7 @@ describe("computeGovernanceScore", () => {
       },
       tags: {
         ...mockData.tags,
-        summary: { totalTableTags: 8, totalColumnTags: 5, uniqueTags: 4, sensitiveDataTagged: 3 },
+        summary: { totalTableTags: 8, totalColumnTags: 5, uniqueTags: 4, tablesWithTags: 2, sensitiveDataTagged: 3 },
       },
       lineage: {
         lineageEdges: [{ source_table_catalog: "main", source_table_schema: "default", source_table_name: "raw", target_table_catalog: "main", target_table_schema: "default", target_table_name: "orders" }],
