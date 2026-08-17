@@ -231,7 +231,12 @@ export default function Dashboard() {
               let detail = "";
               if (type === "structure" && rd) detail = `${rd.summary?.totalCatalogs ?? 0} catálogos · ${rd.summary?.totalSchemas ?? 0} schemas · ${rd.summary?.totalTables ?? 0} tabelas`;
               if (type === "glossary" && rd) detail = `${rd.summary?.tableDocCoverage ?? 0}% tabelas · ${rd.summary?.columnDocCoverage ?? 0}% colunas documentadas`;
-              if (type === "tags" && rd) detail = `${rd.summary?.totalTableTags ?? 0} tags em tabelas · ${rd.summary?.uniqueTags ?? 0} tags únicas`;
+              if (type === "tags" && rd) {
+                const tableTags = rd.summary?.totalTableTags ?? 0;
+                const columnTags = rd.summary?.totalColumnTags ?? 0;
+                const totalTags = tableTags + columnTags;
+                detail = `${totalTags} tags aplicadas · ${rd.summary?.tablesWithTags ?? 0} ativos cobertos · ${rd.summary?.uniqueTags ?? 0} tags únicas`;
+              }
               if (type === "access" && rd) detail = `${rd.summary?.totalGrants ?? 0} grants · ${rd.summary?.uniqueGrantees ?? 0} grantees`;
               if (type === "lineage" && rd) detail = `${rd.summary?.totalEdges ?? 0} relações · ${rd.summary?.uniqueSources ?? 0} origens`;
               if (type === "security" && rd) detail = `${rd.summary?.totalFunctions ?? 0} funções · ${rd.summary?.rowFilterCount ?? 0} filtros de linha`;

@@ -218,8 +218,14 @@ export async function analyzeTags(config: DatabricksConfig) {
     tagDist[tag] = (tagDist[tag] ?? 0) + 1;
   });
 
-  // Count unique tables with tags
-  const tablesWithTags = new Set(tableTagsRows.map((r) => `${r.schema_name}.${r.table_name}`));
+  // Count unique assets with at least one table- or column-level tag.
+  // Column tags must count toward asset coverage; otherwise a catalog with
+  // only column tags is incorrectly reported as 0% covered.
+  const taggedAssets = new Set(
+    [...tableTagsRows, ...columnTagsRows].map((r) =>
+      `${r.catalog_name ?? config.catalog}.${r.schema_name}.${r.table_name}`
+    )
+  );
 
   const sensitiveKeywords = ["pii", "lgpd", "confidential", "confidencial", "sensitive", "sensivel", "restricted", "restrito"];
   const sensitiveCount = [...tableTagsRows, ...columnTagsRows].filter((r) =>
@@ -231,10 +237,12 @@ export async function analyzeTags(config: DatabricksConfig) {
     columnTags: columnTagsRows,
     tagDistribution: Object.entries(tagDist).map(([name, count]) => ({ name, count })),
     summary: {
-      totalTableTags: tableTags.rows.length,
-      totalColumnTags: columnTags.rows.length,
+      totalTableTags: tableTagsRows.length,
+      totalColumnTags: columnTagsRows.length,
       uniqueTags: Object.keys(tagDist).length,
-      tablesWithTags: tablesWithTags.size,
+      // Kept for API compatibility; this now means tagged assets at either
+      // table or column level.
+      tablesWithTags: taggedAssets.size,
       sensitiveDataTagged: sensitiveCount,
     },
   };
@@ -424,7 +432,9 @@ export function computeGovernanceScore(data: GovernanceAnalysisData): {
 
   // 2. Tag classification score (20 pts)
   const totalAssets = data.structure.summary.totalTables + data.structure.summary.totalViews;
-  const taggedAssets = data.tags.summary.totalTableTags;
+  // Coverage is based on distinct assets, not tag assignment rows. A single
+  // asset can have multiple tags and column tags must also count.
+  const taggedAssets = data.tags.summary.tablesWithTags ?? 0;
   const tagCoverage = totalAssets > 0 ? (taggedAssets / totalAssets) * 100 : 0;
   const tagScore = Math.min(20, Math.round(tagCoverage * 0.2));
   breakdown.classification = tagScore;

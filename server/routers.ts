@@ -215,7 +215,7 @@ export const appRouter = router({
           totalSchemas: results.structure?.summary.totalSchemas ?? 0,
           totalTables: (results.structure?.summary.totalTables ?? 0) + (results.structure?.summary.totalViews ?? 0),
           docCoverage: results.glossary?.summary.tableDocCoverage ?? 0,
-          tagCoverage: results.tags && results.structure ? Math.round((results.tags.summary.tablesWithTags / Math.max(1, (results.structure.summary.totalTables + results.structure.summary.totalViews))) * 100) : 0,
+          tagCoverage: results.tags && results.structure ? Math.round(((results.tags.summary.tablesWithTags ?? 0) / Math.max(1, (results.structure.summary.totalTables + results.structure.summary.totalViews))) * 100) : 0,
           errorMessage: hasErrors ? JSON.stringify(errors) : undefined,
         });
 
@@ -442,15 +442,18 @@ export const appRouter = router({
     analyzeCompliance: protectedProcedure
       .input(z.object({
         databricksHost: z.string(),
-        databricksToken: z.string(),
+        databricksToken: z.string().optional(),
         catalog: z.string(),
+        useVault: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        // TODO: Implement real analysis with Databricks queries
-        // For now, return mock data with structure matching real analysis
+        const token = input.useVault || !input.databricksToken
+          ? await getDatabricksToken()
+          : input.databricksToken;
+
         return analyzeLGPDCompliance({
           host: input.databricksHost,
-          token: input.databricksToken,
+          token,
           catalog: input.catalog,
         });
       }),

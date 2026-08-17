@@ -3,7 +3,7 @@
  * Analyzes and reports on LGPD/GDPR compliance for data assets
  */
 
-import { DatabricksConfig } from "./databricks";
+import { analyzeStructure, analyzeTags, DatabricksConfig, executeStatement } from "./databricks";
 
 export interface LGPDAnalysis {
   summary: {
@@ -18,7 +18,7 @@ export interface LGPDAnalysis {
     piiColumnsIdentified: number;
     piiTagged: number;
     untaggedPiiRisk: number;
-    categories: Array<{ name: string; count: number; samples: string[] }>;
+    categories: Array<{ name: string; count: number; tagged: number; samples: string[] }>;
   };
   dataMinimization: {
     assessment: "compliant" | "partial" | "noncompliant";
@@ -42,20 +42,20 @@ export interface LGPDAnalysis {
   };
   encryption: {
     assessment: "enabled" | "partial" | "disabled";
-    encryptedTables: number;
-    unencryptedTables: number;
+    encryptedTables: number | null;
+    unencryptedTables: number | null;
     recommendations: string[];
   };
   audit: {
-    accessLogsEnabled: boolean;
+    accessLogsEnabled: boolean | null;
     logRetention: number; // days
     lastAuditDate?: string;
     accessEvents: number;
   };
   dsr: {
-    readyForDSR: boolean;
-    readyForDeletion: boolean;
-    readyForExport: boolean;
+    readyForDSR: boolean | null;
+    readyForDeletion: boolean | null;
+    readyForExport: boolean | null;
     gaps: string[];
   };
   responsibilities: {
@@ -136,81 +136,140 @@ const PII_PATTERNS: PiiPattern[] = [
 export async function analyzeLGPDCompliance(
   config: DatabricksConfig
 ): Promise<LGPDAnalysis> {
-  // TODO: Implement full LGPD analysis
-  // This is a template/scaffold for LGPD compliance checks
+  const [structure, tags, columnsResult] = await Promise.all([
+    analyzeStructure(config),
+    analyzeTags(config),
+    executeStatement(
+      config,
+      `SELECT table_schema, table_name, column_name, data_type FROM ${config.catalog}.information_schema.columns`
+    ),
+  ]);
 
-  const analysis: LGPDAnalysis = {
+  const columns = columnsResult.rows ?? [];
+  const qualified = (row: Record<string, string | null>, column?: string | null) =>
+    [row.table_schema ?? row.schema_name, row.table_name, column ?? row.column_name]
+      .filter(Boolean)
+      .join(".");
+
+  const piiDetections = columns.flatMap((column) =>
+    detectPIIColumns([
+      { name: column.column_name ?? "", type: column.data_type ?? "" },
+    ]).map((detection) => ({
+      ...detection,
+      columnName: qualified(column, detection.columnName),
+      sourceColumnName: detection.columnName,
+    }))
+  );
+
+  const taggedPiiKeys = new Set(
+    (tags.columnTags ?? []).map((tag) => qualified(tag, tag.column_name))
+  );
+  const piiTagged = piiDetections.filter((detection) =>
+    taggedPiiKeys.has(detection.columnName)
+  ).length;
+
+  const categories = Array.from(
+    piiDetections.reduce((byCategory, detection) => {
+      const current = byCategory.get(detection.detectedAs) ?? {
+        name: detection.detectedAs,
+        count: 0,
+        tagged: 0,
+        samples: [] as string[],
+      };
+      current.count += 1;
+      if (taggedPiiKeys.has(detection.columnName)) current.tagged += 1;
+      if (current.samples.length < 5) current.samples.push(detection.columnName);
+      byCategory.set(detection.detectedAs, current);
+      return byCategory;
+    }, new Map<string, { name: string; count: number; tagged: number; samples: string[] }>()),
+  ).map(([, category]) => category);
+
+  const retentionColumns = columns.filter((column) =>
+    /(retention|expires|expiry|deleted_at|deletion_date|retention_days)/i.test(
+      column.column_name ?? ""
+    )
+  );
+  const consentFields = columns
+    .filter((column) => /(consent|consented|consent_date)/i.test(column.column_name ?? ""))
+    .map((column) => qualified(column, column.column_name));
+  const retentionTables = Array.from(
+    new Set(retentionColumns.map((column) => qualified(column).split(".").slice(0, 2).join(".")))
+  );
+  const totalTables = structure.summary.totalTables + structure.summary.totalViews;
+  const piiCoverage = piiDetections.length > 0 ? piiTagged / piiDetections.length : 1;
+  const retentionCoverage = totalTables > 0 ? retentionTables.length / totalTables : 0;
+  const score = Math.round(piiCoverage * 50 + retentionCoverage * 20);
+  const riskLevel: LGPDAnalysis["summary"]["riskLevel"] =
+    score >= 80 ? "low" : score >= 60 ? "medium" : score >= 30 ? "high" : "critical";
+
+  const untaggedPiiRisk = Math.max(0, piiDetections.length - piiTagged);
+  const criticalIssues = [
+    untaggedPiiRisk > 0,
+    retentionTables.length === 0,
+    consentFields.length === 0,
+  ].filter(Boolean).length;
+
+  return {
     summary: {
-      complianceScore: 45, // Placeholder
-      riskLevel: "high",
-      criticalIssues: 3,
-      highRiskAssets: 12,
+      complianceScore: score,
+      riskLevel,
+      criticalIssues,
+      highRiskAssets: untaggedPiiRisk,
       lastUpdated: new Date().toISOString(),
     },
     piiDetection: {
-      totalColumns: 0,
-      piiColumnsIdentified: 0,
-      piiTagged: 0,
-      untaggedPiiRisk: 0,
-      categories: [],
+      totalColumns: columns.length,
+      piiColumnsIdentified: piiDetections.length,
+      piiTagged,
+      untaggedPiiRisk,
+      categories,
     },
     dataMinimization: {
-      assessment: "partial",
+      assessment: piiDetections.length === 0 ? "compliant" : "partial",
       unnecessaryColumns: [],
-      recommendations: [
-        "Review and remove unused columns containing PII",
-        "Implement column-level deletion policies",
-        "Archive historical data older than 2 years",
-      ],
+      recommendations: piiDetections.length > 0
+        ? ["Revise as colunas PII identificadas e aplique minimização conforme a finalidade de uso."]
+        : [],
     },
     retention: {
-      assessment: "undefined",
-      policies: [],
-      gaps: [
-        "No retention policy defined for customer tables",
-        "No automatic deletion mechanism detected",
-      ],
+      assessment: retentionTables.length > 0 ? "defined" : "undefined",
+      policies: retentionTables.map((table) => ({ table, assessment: "defined" as const })),
+      gaps: retentionTables.length === 0
+        ? ["Nenhum campo de retenção ou expiração foi encontrado no Unity Catalog."]
+        : [],
     },
     consent: {
-      assessment: "untracked",
-      consentFields: [],
-      missingSources: [
-        "No consent tracking fields found in customer/user tables",
-      ],
+      assessment: consentFields.length > 0 ? "tracked" : "untracked",
+      consentFields,
+      missingSources: consentFields.length === 0
+        ? ["Nenhum campo de consentimento foi encontrado nas colunas catalogadas."]
+        : [],
     },
     encryption: {
       assessment: "partial",
-      encryptedTables: 2,
-      unencryptedTables: 10,
+      encryptedTables: null,
+      unencryptedTables: null,
       recommendations: [
-        "Enable encryption at rest for all PII-containing tables",
-        "Implement column-level encryption for critical identifiers (CPF, email)",
+        "O Unity Catalog consultado não expõe, nesta análise, uma evidência suficiente para afirmar o estado de criptografia física.",
       ],
     },
     audit: {
-      accessLogsEnabled: false,
+      accessLogsEnabled: null,
       logRetention: 0,
       accessEvents: 0,
     },
     dsr: {
-      readyForDSR: false,
-      readyForDeletion: false,
-      readyForExport: false,
-      gaps: [
-        "Data Subject Request (DSR) workflow not automated",
-        "No pseudonymization/anonymization utilities available",
-        "Lineage tracking incomplete for audit trail",
-      ],
+      readyForDSR: null,
+      readyForDeletion: null,
+      readyForExport: null,
+      gaps: ["A prontidão de DSR depende de workflows operacionais que não são expostos pelo information_schema consultado."],
     },
     responsibilities: {
-      dataController: "Casas Bahia",
+      dataController: config.catalog,
       dataProcessor: "Databricks",
-      dpo: "dpo@casasbahia.com.br",
-      owner: "Data Governance Team",
+      owner: "Não informado no Unity Catalog",
     },
   };
-
-  return analysis;
 }
 
 /**
@@ -303,7 +362,7 @@ export function generateLGPDRecommendations(
   }
 
   // Encryption gaps
-  if (analysis.encryption.unencryptedTables > 5) {
+  if (analysis.encryption.unencryptedTables !== null && analysis.encryption.unencryptedTables > 5) {
     recommendations.push({
       priority: "high",
       action: `Enable encryption for ${analysis.encryption.unencryptedTables} tables containing PII`,
