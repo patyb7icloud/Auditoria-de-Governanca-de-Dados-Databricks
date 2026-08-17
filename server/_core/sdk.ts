@@ -30,11 +30,10 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
+    if (ENV.oAuthServerUrl) {
+      console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    } else {
+      console.warn("[OAuth] OAUTH_SERVER_URL is not configured. OAuth routes are disabled until configured.");
     }
   }
 
@@ -91,6 +90,12 @@ class SDKServer {
     this.oauthService = new OAuthService(this.client);
   }
 
+  private assertOAuthConfigured(): void {
+    if (!ENV.oAuthServerUrl) {
+      throw new Error("OAUTH_SERVER_URL is not configured");
+    }
+  }
+
   private deriveLoginMethod(
     platforms: unknown,
     fallback: string | null | undefined
@@ -122,6 +127,7 @@ class SDKServer {
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
+    this.assertOAuthConfigured();
     return this.oauthService.getTokenByCode(code, state);
   }
 
@@ -131,6 +137,7 @@ class SDKServer {
    * const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
    */
   async getUserInfo(accessToken: string): Promise<GetUserInfoResponse> {
+    this.assertOAuthConfigured();
     const data = await this.oauthService.getUserInfoByToken({
       accessToken,
     } as ExchangeTokenResponse);
@@ -227,7 +234,11 @@ class SDKServer {
         name,
       };
     } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+      // Stale/rotated JWT cookies are common in local dev; treat as unauthenticated without noisy logs.
+      const message = String(error);
+      if (!message.includes("JWSSignatureVerificationFailed")) {
+        console.warn("[Auth] Session verification failed", message);
+      }
       return null;
     }
   }
@@ -235,6 +246,7 @@ class SDKServer {
   async getUserInfoWithJwt(
     jwtToken: string
   ): Promise<GetUserInfoWithJwtResponse> {
+    this.assertOAuthConfigured();
     const payload: GetUserInfoWithJwtRequest = {
       jwtToken,
       projectId: ENV.appId,

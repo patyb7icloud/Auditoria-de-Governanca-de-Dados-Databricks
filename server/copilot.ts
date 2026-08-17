@@ -133,6 +133,7 @@ Responda à pergunta do usuário de forma natural, clara e profissional em portu
       );
 
       const answerResult = await invokeLLM({
+        model: decisionModel,
         messages: [{ role: "user", content: answerPrompt }],
       });
       const finalAnswer = extractText(answerResult);

@@ -23,6 +23,7 @@ import {
   updateAnalysisResult,
   getAnalysisResultsBySession,
 } from "./db";
+import { getDatabricksToken } from "./keyvault";
 import { analyzeLGPDCompliance, detectPIIColumns, generateLGPDRecommendations } from "./lgpd-compliance";
 import { generateSelfHealingSuggestions, applySelfHealing } from "./self-healing";
 import { analyzeDataROI } from "./finops";
@@ -30,8 +31,9 @@ import { askCopilot, checkSecurityAnomalies } from "./copilot";
 
 const databricksConfigSchema = z.object({
   host: z.string().min(1),
-  token: z.string().min(1),
+  token: z.string().optional(),
   catalog: z.string().min(1),
+  useVault: z.boolean().optional(),
 });
 
 export const appRouter = router({
@@ -50,17 +52,26 @@ export const appRouter = router({
     testConnection: protectedProcedure
       .input(databricksConfigSchema)
       .mutation(async ({ input }) => {
-        return testConnection(input);
+        let config = { ...input };
+        if (input.useVault || !input.token) {
+          config.token = await getDatabricksToken();
+        }
+        return testConnection(config as any);
       }),
 
     // Start a full audit session
     startAudit: protectedProcedure
       .input(databricksConfigSchema)
       .mutation(async ({ input, ctx }) => {
+        let config = { ...input };
+        if (input.useVault || !input.token) {
+          config.token = await getDatabricksToken();
+        }
+
         const sessionId = await createAuditSession({
           userId: ctx.user.id,
-          databricksHost: input.host,
-          targetCatalog: input.catalog,
+          databricksHost: config.host,
+          targetCatalog: config.catalog,
           status: "running",
         });
 
@@ -83,7 +94,7 @@ export const appRouter = router({
         // Structure
         try {
           const t0 = Date.now();
-          const data = await analyzeStructure(input);
+          const data = await analyzeStructure(config as any);
           results.structure = data;
           await updateAnalysisResult(resultIds.structure, {
             status: "completed",
@@ -99,7 +110,7 @@ export const appRouter = router({
         // Glossary
         try {
           const t0 = Date.now();
-          const data = await analyzeGlossary(input);
+          const data = await analyzeGlossary(config as any);
           results.glossary = data;
           await updateAnalysisResult(resultIds.glossary, {
             status: "completed",
@@ -115,7 +126,7 @@ export const appRouter = router({
         // Tags
         try {
           const t0 = Date.now();
-          const data = await analyzeTags(input);
+          const data = await analyzeTags(config as any);
           results.tags = data;
           await updateAnalysisResult(resultIds.tags, {
             status: "completed",
@@ -130,7 +141,7 @@ export const appRouter = router({
         // Access
         try {
           const t0 = Date.now();
-          const data = await analyzeAccess(input);
+          const data = await analyzeAccess(config as any);
           results.access = data;
           await updateAnalysisResult(resultIds.access, {
             status: "completed",
@@ -145,7 +156,7 @@ export const appRouter = router({
         // Lineage
         try {
           const t0 = Date.now();
-          const data = await analyzeLineage(input);
+          const data = await analyzeLineage(config as any);
           results.lineage = data;
           await updateAnalysisResult(resultIds.lineage, {
             status: "completed",
@@ -160,7 +171,7 @@ export const appRouter = router({
         // Security
         try {
           const t0 = Date.now();
-          const data = await analyzeSecurity(input);
+          const data = await analyzeSecurity(config as any);
           results.security = data;
           await updateAnalysisResult(resultIds.security, {
             status: "completed",
@@ -278,13 +289,13 @@ export const appRouter = router({
           security: "Segurança Dinâmica",
         };
 
-        const checklistA = analysesA.map((a) => ({
+        const checklistA = (analysesA ?? []).map((a) => ({
           type: a.analysisType,
           label: analysisLabels[a.analysisType] ?? a.analysisType,
           status: a.status,
           score: a.score,
         }));
-        const checklistB = analysesB.map((a) => ({
+        const checklistB = (analysesB ?? []).map((a) => ({
           type: a.analysisType,
           label: analysisLabels[a.analysisType] ?? a.analysisType,
           status: a.status,
@@ -324,7 +335,7 @@ export const appRouter = router({
             docCoverage: session.docCoverage,
             tagCoverage: session.tagCoverage,
           },
-          analyses: analyses.map((a) => ({
+          analyses: (analyses ?? []).map((a) => ({
             type: a.analysisType,
             status: a.status,
             score: a.score,

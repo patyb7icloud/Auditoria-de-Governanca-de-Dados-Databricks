@@ -59,6 +59,9 @@ export async function executeStatement(
     body: JSON.stringify({
       statement: sql,
       warehouse_id: wId,
+      // Garante que INFORMATION_SCHEMA seja resolvido no catalog auditado,
+      // e não no catalog padrão `system` do SQL warehouse.
+      catalog: config.catalog,
       wait_timeout: "30s",
       on_wait_timeout: "CONTINUE",
     }),
@@ -92,7 +95,14 @@ export async function executeStatement(
   }
 
   if (data.status.state === "FAILED" || data.status.state === "CANCELED") {
-    throw new Error(data.status.error?.message ?? "Query failed");
+    const message = data.status.error?.message ?? "Query failed";
+    // Consultas administrativas podem requerer USE CATALOG no `system`.
+    // A auditoria do catálogo selecionado continua com os dados disponíveis.
+    if (/USE CATALOG on Catalog 'system'|INSUFFICIENT_PERMISSIONS/i.test(message)) {
+      console.warn("Consulta administrativa ignorada por falta de permissão no catalog system:", message);
+      return { columns: [], rows: [] };
+    }
+    throw new Error(message);
   }
 
   const schema = data.manifest?.schema?.columns ?? data.result?.schema?.columns ?? [];
@@ -122,6 +132,10 @@ export async function testConnection(config: DatabricksConfig): Promise<{ ok: bo
     if (warehouses.length === 0) return { ok: false, message: "No SQL warehouses found in this workspace" };
     const running = warehouses.find((w: any) => w.state === "RUNNING");
     const wh = running ?? warehouses[0];
+    const catalogCheck = await executeStatement(config, `SHOW SCHEMAS IN ${config.catalog}`, wh.id);
+    if (catalogCheck.rows.length === 0) {
+      return { ok: false, message: `Connected to warehouse, but no schemas are accessible in catalog: ${config.catalog}` };
+    }
     return { ok: true, message: `Connected successfully. Using warehouse: ${wh.name}`, warehouseId: wh.id };
   } catch (e: any) {
     return { ok: false, message: e.message ?? "Connection failed" };
@@ -131,9 +145,10 @@ export async function testConnection(config: DatabricksConfig): Promise<{ ok: bo
 // ─── Analysis 1: Structure Mapping ───────────────────────────────────────────
 
 export async function analyzeStructure(config: DatabricksConfig) {
-  const catalogsResult = await executeStatement(config, `SELECT catalog_name, catalog_owner, comment FROM system.information_schema.catalogs`);
-  const schemasResult = await executeStatement(config, `SELECT catalog_name, schema_name, schema_owner, comment FROM system.information_schema.schemata WHERE catalog_name = '${config.catalog}'`);
-  const tablesResult = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, table_type, table_owner FROM system.information_schema.tables WHERE table_catalog = '${config.catalog}'`);
+  // Consultas do catalog alvo não devem depender de USE CATALOG no catalog `system`.
+  const catalogsResult = { rows: [{ catalog_name: config.catalog, catalog_owner: null, comment: null }] };
+  const schemasResult = await executeStatement(config, `SHOW SCHEMAS IN ${config.catalog}`);
+  const tablesResult = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, table_type, table_owner FROM ${config.catalog}.information_schema.tables`);
 
   // Ensure rows are arrays (defensive programming)
   const catalogsRows = catalogsResult?.rows ?? [];
@@ -156,10 +171,10 @@ export async function analyzeStructure(config: DatabricksConfig) {
 // ─── Analysis 2: Data Glossary ────────────────────────────────────────────────
 
 export async function analyzeGlossary(config: DatabricksConfig) {
-  const tablesWithComments = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, comment as table_description FROM system.information_schema.tables WHERE table_catalog = '${config.catalog}' AND comment IS NOT NULL`);
-  const allTables = await executeStatement(config, `SELECT COUNT(*) as total FROM system.information_schema.tables WHERE table_catalog = '${config.catalog}'`);
-  const columnsWithComments = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, column_name, data_type, comment as column_description FROM system.information_schema.columns WHERE table_catalog = '${config.catalog}' AND comment IS NOT NULL`);
-  const allColumns = await executeStatement(config, `SELECT COUNT(*) as total FROM system.information_schema.columns WHERE table_catalog = '${config.catalog}'`);
+  const tablesWithComments = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, comment as table_description FROM ${config.catalog}.information_schema.tables WHERE comment IS NOT NULL`);
+  const allTables = await executeStatement(config, `SELECT COUNT(*) as total FROM ${config.catalog}.information_schema.tables`);
+  const columnsWithComments = await executeStatement(config, `SELECT table_catalog, table_schema, table_name, column_name, data_type, comment as column_description FROM ${config.catalog}.information_schema.columns WHERE comment IS NOT NULL`);
+  const allColumns = await executeStatement(config, `SELECT COUNT(*) as total FROM ${config.catalog}.information_schema.columns`);
 
   // Ensure rows are arrays (defensive programming)
   const tablesWithCommentsRows = tablesWithComments?.rows ?? [];
@@ -189,8 +204,8 @@ export async function analyzeGlossary(config: DatabricksConfig) {
 // ─── Analysis 3: Tag Classification ──────────────────────────────────────────
 
 export async function analyzeTags(config: DatabricksConfig) {
-  const tableTags = await executeStatement(config, `SELECT catalog_name, schema_name, table_name, tag_name, tag_value FROM system.information_schema.table_tags WHERE catalog_name = '${config.catalog}'`);
-  const columnTags = await executeStatement(config, `SELECT catalog_name, schema_name, table_name, column_name, tag_name, tag_value FROM system.information_schema.column_tags WHERE catalog_name = '${config.catalog}'`);
+  const tableTags = await executeStatement(config, `SELECT catalog_name, schema_name, table_name, tag_name, tag_value FROM ${config.catalog}.information_schema.table_tags`);
+  const columnTags = await executeStatement(config, `SELECT catalog_name, schema_name, table_name, column_name, tag_name, tag_value FROM ${config.catalog}.information_schema.column_tags`);
 
   // Ensure rows are arrays (defensive programming)
   const tableTagsRows = tableTags?.rows ?? [];
@@ -228,9 +243,9 @@ export async function analyzeTags(config: DatabricksConfig) {
 // ─── Analysis 4: Access Policies (Grants) ────────────────────────────────────
 
 export async function analyzeAccess(config: DatabricksConfig) {
-  const tablePrivs = await executeStatement(config, `SELECT grantor, grantee, table_catalog, table_schema, table_name, privilege_type FROM system.information_schema.table_privileges WHERE table_catalog = '${config.catalog}'`);
-  const catalogPrivs = await executeStatement(config, `SELECT grantor, grantee, catalog_name, privilege_type FROM system.information_schema.catalog_privileges WHERE catalog_name = '${config.catalog}'`);
-  const schemaPrivs = await executeStatement(config, `SELECT grantor, grantee, catalog_name, schema_name, privilege_type FROM system.information_schema.schema_privileges WHERE catalog_name = '${config.catalog}'`);
+  const tablePrivs = await executeStatement(config, `SELECT grantor, grantee, table_catalog, table_schema, table_name, privilege_type FROM ${config.catalog}.information_schema.table_privileges`);
+  const catalogPrivs = await executeStatement(config, `SELECT grantor, grantee, catalog_name, privilege_type FROM ${config.catalog}.information_schema.catalog_privileges`);
+  const schemaPrivs = await executeStatement(config, `SELECT grantor, grantee, catalog_name, schema_name, privilege_type FROM ${config.catalog}.information_schema.schema_privileges`);
 
   // Ensure rows are arrays (defensive programming)
   const tablePrivsRows = tablePrivs?.rows ?? [];
@@ -269,7 +284,15 @@ export async function analyzeAccess(config: DatabricksConfig) {
 // ─── Analysis 5: Data Lineage ─────────────────────────────────────────────────
 
 export async function analyzeLineage(config: DatabricksConfig) {
-  const lineage = await executeStatement(config, `SELECT source_table_catalog, source_table_schema, source_table_name, target_table_catalog, target_table_schema, target_table_name FROM system.access.table_lineage WHERE target_table_catalog = '${config.catalog}' OR source_table_catalog = '${config.catalog}' LIMIT 500`);
+  // `system.access.table_lineage` é opcional e costuma exigir privilégios globais.
+  // Não interrompa uma auditoria do catalog por falta desse privilégio administrativo.
+  let lineage: Awaited<ReturnType<typeof executeStatement>>;
+  try {
+    lineage = await executeStatement(config, `SELECT source_table_catalog, source_table_schema, source_table_name, target_table_catalog, target_table_schema, target_table_name FROM system.access.table_lineage WHERE target_table_catalog = '${config.catalog}' OR source_table_catalog = '${config.catalog}' LIMIT 500`);
+  } catch (error: any) {
+    if (!/USE CATALOG on Catalog 'system'|INSUFFICIENT_PERMISSIONS/i.test(error?.message ?? "")) throw error;
+    lineage = { columns: [], rows: [] };
+  }
 
   // Ensure rows are arrays (defensive programming)
   const lineageRows = lineage?.rows ?? [];
@@ -291,10 +314,10 @@ export async function analyzeLineage(config: DatabricksConfig) {
 // ─── Analysis 6: Dynamic Security ────────────────────────────────────────────
 
 export async function analyzeSecurity(config: DatabricksConfig) {
-  const routines = await executeStatement(config, `SELECT routine_catalog, routine_schema, routine_name, routine_definition FROM system.information_schema.routines WHERE routine_catalog = '${config.catalog}' AND routine_type = 'FUNCTION'`);
+  const routines = await executeStatement(config, `SELECT routine_catalog, routine_schema, routine_name, routine_definition FROM ${config.catalog}.information_schema.routines WHERE routine_type = 'FUNCTION'`);
 
   // DESCRIBE EXTENDED for tables with potential masks — sample up to 20 tables
-  const tablesResult = await executeStatement(config, `SELECT table_schema, table_name FROM system.information_schema.tables WHERE table_catalog = '${config.catalog}' AND table_type = 'BASE TABLE' LIMIT 20`);
+  const tablesResult = await executeStatement(config, `SELECT table_schema, table_name FROM ${config.catalog}.information_schema.tables WHERE table_type = 'BASE TABLE' LIMIT 20`);
 
   // Ensure rows are arrays (defensive programming)
   const routinesRows = routines?.rows ?? [];

@@ -97,16 +97,19 @@ export function truncateContext(data: any[], maxItems: number = 3): any[] {
  * Define qual modelo usar baseado na complexidade/custo
  */
 export function getOptimizedModel(action: string): { model: string; temperature: number } {
+  const smallModel = process.env.LLM_MODEL_SMALL?.trim() || "gpt-4o-mini";
+  const reasoningModel = process.env.LLM_MODEL_REASONING?.trim() || "gpt-4o-mini";
+
   // SecOps é background/repetitivo, usa modelo mais barato
   if (action === "secops") {
-    return { model: "claude-haiku-4-5", temperature: 0.1 };
+    return { model: smallModel, temperature: 0.1 };
   }
   
   // Copilot de leitura simples pode usar modelo eficiente
   if (action === "copilot_read") {
-    return { model: "claude-haiku-4-5", temperature: 0.1 };
+    return { model: smallModel, temperature: 0.1 };
   }
   
   // Self-Healing e Copilot de Escrita (geração de políticas) exigem mais raciocínio
-  return { model: "claude-sonnet-4-6", temperature: 0.2 };
+  return { model: reasoningModel, temperature: 0.2 };
 }
