@@ -337,18 +337,22 @@ export function detectPIIColumns(
  * Generate LGPD compliance gaps and recommendations
  */
 export function generateLGPDRecommendations(
-  analysis: LGPDAnalysis
+  analysis: LGPDAnalysis,
+  language: "pt" | "en" = "pt",
 ): Array<{ priority: "critical" | "high" | "medium"; action: string }> {
   const recommendations: Array<{
     priority: "critical" | "high" | "medium";
     action: string;
   }> = [];
+  const isEnglish = language === "en";
 
   // PII gaps
   if (analysis.piiDetection.untaggedPiiRisk > 0) {
     recommendations.push({
       priority: "critical",
-      action: `Apply PII tags to ${analysis.piiDetection.untaggedPiiRisk} untagged PII columns`,
+      action: isEnglish
+        ? `Apply PII tags to ${analysis.piiDetection.untaggedPiiRisk} untagged PII columns`
+        : `Aplicar tags de PII em ${analysis.piiDetection.untaggedPiiRisk} colunas PII não etiquetadas`,
     });
   }
 
@@ -356,33 +360,39 @@ export function generateLGPDRecommendations(
   if (analysis.retention.assessment === "undefined") {
     recommendations.push({
       priority: "critical",
-      action:
-        "Define and implement data retention policies (e.g., delete customer data after 5 years)",
+      action: isEnglish
+        ? "Define and implement data retention policies (e.g., delete customer data after 5 years)"
+        : "Definir e implementar políticas de retenção de dados (por exemplo, excluir dados de clientes após 5 anos)",
     });
   }
 
-  // Encryption gaps
+  // Encryption gaps are generated only when the catalog supplied a measured value.
   if (analysis.encryption.unencryptedTables !== null && analysis.encryption.unencryptedTables > 5) {
     recommendations.push({
       priority: "high",
-      action: `Enable encryption for ${analysis.encryption.unencryptedTables} tables containing PII`,
+      action: isEnglish
+        ? `Enable encryption for ${analysis.encryption.unencryptedTables} tables containing PII`
+        : `Habilitar criptografia para ${analysis.encryption.unencryptedTables} tabelas que contêm PII`,
     });
   }
 
-  // Audit gaps
-  if (!analysis.audit.accessLogsEnabled) {
+  // null means that the catalog did not provide verifiable evidence; it is not disabled.
+  if (analysis.audit.accessLogsEnabled === false) {
     recommendations.push({
       priority: "high",
-      action: "Enable comprehensive access logging for compliance audit trails",
+      action: isEnglish
+        ? "Enable comprehensive access logging for compliance audit trails"
+        : "Habilitar logs abrangentes de acesso para trilhas de auditoria de conformidade",
     });
   }
 
-  // DSR gaps
-  if (!analysis.dsr.readyForDSR) {
+  // DSR gaps are generated only when the analysis explicitly reports not ready.
+  if (analysis.dsr.readyForDSR === false) {
     recommendations.push({
       priority: "high",
-      action:
-        "Implement automated Data Subject Request (DSR) workflow for export/deletion",
+      action: isEnglish
+        ? "Implement automated Data Subject Request (DSR) workflow for export/deletion"
+        : "Implementar workflow automatizado de Solicitação do Titular (DSR) para exportação/exclusão",
     });
   }
 
@@ -390,8 +400,9 @@ export function generateLGPDRecommendations(
   if (analysis.consent.assessment === "untracked") {
     recommendations.push({
       priority: "medium",
-      action:
-        "Add consent tracking fields to tables containing personal data",
+      action: isEnglish
+        ? "Add consent tracking fields to tables containing personal data"
+        : "Adicionar campos de rastreamento de consentimento às tabelas que contêm dados pessoais",
     });
   }
 

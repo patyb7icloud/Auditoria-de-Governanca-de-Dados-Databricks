@@ -473,9 +473,10 @@ export const appRouter = router({
     generateRecommendations: protectedProcedure
       .input(z.object({
         analysis: z.any(),
+        language: z.enum(["pt", "en"]).default("pt"),
       }))
       .query(({ input }) => {
-        return generateLGPDRecommendations(input.analysis);
+        return generateLGPDRecommendations(input.analysis, input.language);
       }),
   }),
 });

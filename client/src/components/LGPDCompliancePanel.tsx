@@ -195,6 +195,11 @@ export function LGPDCompliancePanel({
                 {displayNumber(encryptedTables)}
               </p>
               <p className="text-xs text-gray-600">{language === 'pt' ? 'Tabelas criptografadas' : 'Tables encrypted'}</p>
+              {encryptedTables === null && (
+                <p className="text-[11px] text-gray-500">
+                  {language === 'pt' ? 'Evidência não disponível no catálogo consultado' : 'Evidence unavailable in the queried catalog'}
+                </p>
+              )}
             </div>
             {encryptedTables === null ? (
               <Badge variant="outline" className="w-full justify-center">
@@ -220,6 +225,11 @@ export function LGPDCompliancePanel({
                 {auditLogsEnabled === null ? 'N/D' : auditLogsEnabled ? 'ON' : 'OFF'}
               </p>
               <p className="text-xs text-gray-600">{language === 'pt' ? 'Registro de acesso' : 'Access logging'}</p>
+              {auditLogsEnabled === null && (
+                <p className="text-[11px] text-gray-500">
+                  {language === 'pt' ? 'Evidência não disponível no catálogo consultado' : 'Evidence unavailable in the queried catalog'}
+                </p>
+              )}
             </div>
             <Badge
               variant={auditLogsEnabled === true ? 'default' : 'outline'}

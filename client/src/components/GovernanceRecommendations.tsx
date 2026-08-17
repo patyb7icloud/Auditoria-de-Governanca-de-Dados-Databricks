@@ -8,6 +8,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import type { Language } from '@shared/i18n/translations';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 
@@ -42,10 +43,45 @@ export interface RecommendationGroup {
 export function GovernanceRecommendations({
   recommendations,
   onImplement,
+  language = 'pt',
 }: {
   recommendations: GovernanceRecommendation[];
   onImplement?: (rec: GovernanceRecommendation) => void;
+  language?: Language;
 }) {
+  const isEnglish = language === 'en';
+  const labels = isEnglish
+    ? {
+        critical: 'Critical',
+        high: 'High',
+        medium: 'Medium',
+        low: 'Low',
+        affectedAssets: 'Affected Assets:',
+        impact: 'Impact:',
+        quick: 'Quick',
+        mediumEffort: 'Medium',
+        complex: 'Complex',
+        implement: 'Implement',
+        none: 'No recommendations at this time. Your environment is well configured!',
+        quickWins: 'Quick Wins',
+        quickWinsDescription: 'These recommendations can be implemented quickly and will have a significant impact:',
+      }
+    : {
+        critical: 'Críticas',
+        high: 'Altas',
+        medium: 'Médias',
+        low: 'Baixas',
+        affectedAssets: 'Ativos Afetados:',
+        impact: 'Impacto:',
+        quick: 'Rápido',
+        mediumEffort: 'Médio',
+        complex: 'Complexo',
+        implement: 'Implementar',
+        none: 'Nenhuma recomendação no momento. Seu ambiente está bem configurado!',
+        quickWins: 'Quick Wins',
+        quickWinsDescription: 'Essas recomendações podem ser implementadas rapidamente e terão impacto significativo:',
+      };
+
   // Agrupa por prioridade
   const grouped = useMemo(() => {
     const groups: Record<string, GovernanceRecommendation[]> = {
@@ -96,22 +132,22 @@ export function GovernanceRecommendations({
       <div className="grid grid-cols-4 gap-4">
         {[
           {
-            label: 'Críticas',
+            label: labels.critical,
             count: grouped.critical.length,
             color: 'text-red-600',
           },
           {
-            label: 'Altas',
+            label: labels.high,
             count: grouped.high.length,
             color: 'text-orange-600',
           },
           {
-            label: 'Médias',
+            label: labels.medium,
             count: grouped.medium.length,
             color: 'text-yellow-600',
           },
           {
-            label: 'Baixas',
+            label: labels.low,
             count: grouped.low.length,
             color: 'text-blue-600',
           },
@@ -144,10 +180,10 @@ export function GovernanceRecommendations({
               {priority === 'low' && (
                 <CheckCircle2 className="h-5 w-5 text-blue-600" />
               )}
-              {priority === 'critical' && 'Críticas'}
-              {priority === 'high' && 'Altas'}
-              {priority === 'medium' && 'Médias'}
-              {priority === 'low' && 'Baixas'}
+              {priority === 'critical' && labels.critical}
+              {priority === 'high' && labels.high}
+              {priority === 'medium' && labels.medium}
+              {priority === 'low' && labels.low}
             </h3>
 
             <div className="space-y-3">
@@ -165,7 +201,7 @@ export function GovernanceRecommendations({
                       {rec.relatedAssets && rec.relatedAssets.length > 0 && (
                         <div className="mb-2">
                           <p className="text-xs text-gray-600 font-semibold mb-1">
-                            Ativos Afetados:
+                            {labels.affectedAssets}
                           </p>
                           <div className="flex flex-wrap gap-1">
                             {rec.relatedAssets.map((asset) => (
@@ -180,16 +216,16 @@ export function GovernanceRecommendations({
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold text-gray-600">
-                            Impacto:
+                            {labels.impact}
                           </span>
                           <span className="text-xs text-gray-700">
                             {rec.impact}
                           </span>
                         </div>
                         <Badge className={getEffortBadgeColor(rec.estimatedEffort)}>
-                          {rec.estimatedEffort === 'quick' && 'Rápido'}
-                          {rec.estimatedEffort === 'medium' && 'Médio'}
-                          {rec.estimatedEffort === 'complex' && 'Complexo'}
+                          {rec.estimatedEffort === 'quick' && labels.quick}
+                          {rec.estimatedEffort === 'medium' && labels.mediumEffort}
+                          {rec.estimatedEffort === 'complex' && labels.complex}
                         </Badge>
                       </div>
                     </div>
@@ -199,7 +235,7 @@ export function GovernanceRecommendations({
                         onClick={() => onImplement(rec)}
                         className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
                       >
-                        Implementar
+                        {labels.implement}
                       </button>
                     )}
                   </div>
@@ -215,7 +251,7 @@ export function GovernanceRecommendations({
         <Alert className="bg-green-50 border-green-200">
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            Nenhuma recomendação no momento. Seu ambiente está bem configurado!
+            {labels.none}
           </AlertDescription>
         </Alert>
       )}
@@ -227,11 +263,10 @@ export function GovernanceRecommendations({
             <Zap className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-semibold text-blue-900 mb-2">
-                Quick Wins ({grouped.quick.length})
+                {labels.quickWins} ({grouped.quick.length})
               </h4>
               <p className="text-sm text-blue-800 mb-3">
-                Essas recomendações podem ser implementadas rapidamente e
-                terão impacto significativo:
+                {labels.quickWinsDescription}
               </p>
               <div className="space-y-2">
                 {grouped.quick.map((rec) => (
@@ -257,85 +292,91 @@ export function GovernanceRecommendations({
 /**
  * Gera recomendações baseadas em análises
  */
-export function generateRecommendations(analysisData: {
-  piiUntagged: number;
-  tagCoverage: number;
-  docCoverage: number;
-  encryptedTables: number;
-  totalTables: number;
-  auditLogsEnabled: boolean;
-  retentionPolicies: number;
-}): GovernanceRecommendation[] {
+export function generateRecommendations(
+  analysisData: {
+    piiUntagged: number;
+    tagCoverage: number;
+    docCoverage: number;
+    encryptedTables: number | null;
+    totalTables: number;
+    auditLogsEnabled: boolean | null;
+    retentionPolicies: number;
+  },
+  language: Language = 'pt',
+): GovernanceRecommendation[] {
   const recommendations: GovernanceRecommendation[] = [];
+  const isEnglish = language === 'en';
 
-  // Recomendações de PII
   if (analysisData.piiUntagged > 0) {
     recommendations.push({
       id: 'pii-tagging',
       priority: 'critical',
       category: 'pii',
-      title: 'Tag PII Columns',
-      description: `${analysisData.piiUntagged} colunas contendo dados pessoais não estão etiquetadas.`,
-      impact: 'Improves compliance score by 20%',
+      title: isEnglish ? 'Tag PII Columns' : 'Etiquetar Colunas PII',
+      description: isEnglish
+        ? `${analysisData.piiUntagged} columns containing personal data are not tagged.`
+        : `${analysisData.piiUntagged} colunas contendo dados pessoais não estão etiquetadas.`,
+      impact: isEnglish ? 'Improves compliance score by 20%' : 'Melhora o score de conformidade em 20%',
       estimatedEffort: 'quick',
-      action: 'Apply pii and sensitivity tags to identified columns',
+      action: isEnglish ? 'Apply PII and sensitivity tags to identified columns' : 'Aplicar tags de PII e sensibilidade às colunas identificadas',
     });
   }
 
-  // Recomendações de cobertura de documentação
   if (analysisData.docCoverage < 60) {
     recommendations.push({
       id: 'documentation-coverage',
       priority: 'high',
       category: 'documentation',
-      title: 'Improve Documentation Coverage',
-      description: `Apenas ${analysisData.docCoverage}% das tabelas têm descrição.`,
-      impact: 'Improves clarity by 25%',
+      title: isEnglish ? 'Improve Documentation Coverage' : 'Melhorar Cobertura de Documentação',
+      description: isEnglish
+        ? `Only ${analysisData.docCoverage}% of tables have a description.`
+        : `Apenas ${analysisData.docCoverage}% das tabelas têm descrição.`,
+      impact: isEnglish ? 'Improves clarity by 25%' : 'Melhora a clareza em 25%',
       estimatedEffort: 'medium',
-      action: 'Add descriptions to undocumented tables and columns',
+      action: isEnglish ? 'Add descriptions to undocumented tables and columns' : 'Adicionar descrições às tabelas e colunas não documentadas',
     });
   }
 
-  // Recomendações de criptografia
-  if (analysisData.encryptedTables < analysisData.totalTables * 0.5) {
+  if (analysisData.encryptedTables !== null && analysisData.encryptedTables < analysisData.totalTables * 0.5) {
     recommendations.push({
       id: 'encryption-coverage',
       priority: 'high',
       category: 'encryption',
-      title: 'Enable Encryption at Rest',
-      description: `Apenas ${analysisData.encryptedTables} de ${analysisData.totalTables} tabelas estão criptografadas.`,
-      impact: 'Improves security posture by 15%',
+      title: isEnglish ? 'Enable Encryption at Rest' : 'Habilitar Criptografia em Repouso',
+      description: isEnglish
+        ? `Only ${analysisData.encryptedTables} of ${analysisData.totalTables} tables are encrypted.`
+        : `Apenas ${analysisData.encryptedTables} de ${analysisData.totalTables} tabelas estão criptografadas.`,
+      impact: isEnglish ? 'Improves security posture by 15%' : 'Melhora a postura de segurança em 15%',
       estimatedEffort: 'complex',
-      action: 'Enable encryption for PII-containing tables',
+      action: isEnglish ? 'Enable encryption for PII-containing tables' : 'Habilitar criptografia para tabelas que contêm PII',
     });
   }
 
-  // Recomendações de audit
-  if (!analysisData.auditLogsEnabled) {
+  if (analysisData.auditLogsEnabled === false) {
     recommendations.push({
       id: 'audit-logs',
       priority: 'critical',
       category: 'audit',
-      title: 'Enable Audit Logging',
-      description: 'Access logs are not being collected.',
-      impact: 'Improves compliance score by 25%',
+      title: isEnglish ? 'Enable Audit Logging' : 'Habilitar Logs de Auditoria',
+      description: isEnglish ? 'Access logs are not being collected.' : 'Os logs de acesso não estão sendo coletados.',
+      impact: isEnglish ? 'Improves compliance score by 25%' : 'Melhora o score de conformidade em 25%',
       estimatedEffort: 'quick',
-      action: 'Enable Databricks audit logs in workspace settings',
+      action: isEnglish ? 'Enable Databricks audit logs in workspace settings' : 'Habilitar logs de auditoria do Databricks nas configurações do workspace',
     });
   }
 
-  // Recomendações de retenção
   if (analysisData.retentionPolicies === 0) {
     recommendations.push({
       id: 'retention-policies',
       priority: 'high',
       category: 'retention',
-      title: 'Define Data Retention Policies',
-      description:
-        'Nenhuma política de retenção definida para conformidade LGPD.',
-      impact: 'Improves LGPD compliance by 30%',
+      title: isEnglish ? 'Define Data Retention Policies' : 'Definir Políticas de Retenção de Dados',
+      description: isEnglish
+        ? 'No retention policy has been defined for LGPD compliance.'
+        : 'Nenhuma política de retenção foi definida para conformidade LGPD.',
+      impact: isEnglish ? 'Improves LGPD compliance by 30%' : 'Melhora a conformidade LGPD em 30%',
       estimatedEffort: 'medium',
-      action: 'Create retention policies for customer data',
+      action: isEnglish ? 'Create retention policies for customer data' : 'Criar políticas de retenção para dados de clientes',
     });
   }
 

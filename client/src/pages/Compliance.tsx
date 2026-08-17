@@ -35,7 +35,7 @@ export default function LGPDCompliance() {
   const analyzeComplianceMutation = trpc.lgpd.analyzeCompliance.useMutation();
   const { data: complianceAnalysis, isPending: isLoadingAnalysis } = analyzeComplianceMutation;
   const recommendationsQuery = trpc.lgpd.generateRecommendations.useQuery(
-    { analysis: complianceAnalysis ?? {} },
+    { analysis: complianceAnalysis ?? {}, language },
     { enabled: !!complianceAnalysis },
   );
   const { data: auditSessions = [] } = trpc.databricks.listSessions.useQuery(undefined, {
@@ -287,6 +287,7 @@ export default function LGPDCompliance() {
             </p>
             <GovernanceRecommendations
               recommendations={recommendations}
+              language={language}
               onImplement={(rec) =>
                 console.log('Implementando:', rec.title)
               }
