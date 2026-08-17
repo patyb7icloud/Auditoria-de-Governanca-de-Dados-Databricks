@@ -9,5 +9,4 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   heartbeatApiUrl: process.env.BUILT_IN_HEARTBEAT_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  vaultUrl: process.env.AZURE_KEYVAULT_URL ?? "",
 };

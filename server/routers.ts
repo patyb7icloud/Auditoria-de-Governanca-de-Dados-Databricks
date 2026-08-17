@@ -24,7 +24,6 @@ import {
   updateAnalysisResult,
   getAnalysisResultsBySession,
 } from "./db";
-import { getDatabricksToken } from "./keyvault";
 import { analyzeLGPDCompliance, detectPIIColumns, generateLGPDRecommendations } from "./lgpd-compliance";
 import { generateSelfHealingSuggestions, applySelfHealing } from "./self-healing";
 import { analyzeDataROI } from "./finops";
