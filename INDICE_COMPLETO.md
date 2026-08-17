@@ -1,5 +1,7 @@
 # 📑 Índice Completo de Melhorias — LGPD Compliance
 
+> **Documentação vigente:** consulte primeiro o [Manual da Ferramenta de Auditoria e Governança Databricks](docs/MANUAL_DA_FERRAMENTA.md). Este índice foi mantido como inventário histórico de artefatos e pode conter descrições anteriores à integração dos dados reais do Unity Catalog.
+
 ## Sumário
 
 **Data:** 2025  
