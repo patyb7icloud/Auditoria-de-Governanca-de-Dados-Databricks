@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeGovernanceScore, GovernanceAnalysisData } from "./databricks";
+import { vi } from "vitest";
+import { analyzeLineage, computeGovernanceScore, GovernanceAnalysisData } from "./databricks";
 
 const mockData: GovernanceAnalysisData = {
   structure: {
@@ -71,6 +72,65 @@ describe("computeGovernanceScore", () => {
     const result = computeGovernanceScore(mockData);
     const hasLineageGap = result.gaps.some((g) => g.includes("linhagem"));
     expect(hasLineageGap).toBe(true);
+  });
+
+  it("distinguishes lineage without permission from verified zero relations", () => {
+    const result = computeGovernanceScore({
+      ...mockData,
+      lineage: {
+        lineageEdges: [],
+        verificationStatus: "not_verifiable",
+        diagnostic: {
+          code: "INSUFFICIENT_PERMISSIONS",
+          message: "A linhagem não pôde ser verificada por falta de permissão.",
+        },
+        summary: { totalEdges: null, uniqueSources: null, uniqueTargets: null },
+      },
+    });
+
+    expect(result.gaps.some((gap) => gap.includes("Linhagem não verificável"))).toBe(true);
+    expect(result.gaps.some((gap) => gap.includes("Nenhuma linhagem de dados registrada"))).toBe(false);
+    expect(result.recommendations.some((recommendation) => recommendation.includes("system.access"))).toBe(true);
+  });
+
+  it("returns a non-verifiable result when system.access denies lineage access", async () => {
+    const responses = [
+      {
+        ok: true,
+        json: async () => ({ warehouses: [{ id: "warehouse-1", state: "RUNNING" }] }),
+      },
+      {
+        ok: true,
+        json: async () => ({
+          statement_id: "statement-1",
+          status: {
+            state: "FAILED",
+            error: {
+              message: "[INSUFFICIENT_PERMISSIONS] User does not have USE SCHEMA on Schema 'system.access'. SQLSTATE: 42501",
+            },
+          },
+        }),
+      },
+    ];
+    const fetchMock = vi.fn().mockImplementation(async () => responses.shift());
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const result = await analyzeLineage({
+        host: "https://adb-example.azuredatabricks.net",
+        token: "test-token",
+        catalog: "nexa_dho_dev",
+      });
+
+      expect(result.verificationStatus).toBe("not_verifiable");
+      expect(result.diagnostic?.code).toBe("INSUFFICIENT_PERMISSIONS");
+      expect(result.summary.totalEdges).toBeNull();
+      expect(result.summary.uniqueSources).toBeNull();
+      expect(result.summary.uniqueTargets).toBeNull();
+      expect(result.lineageEdges).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("generates gap when no security functions are found", () => {

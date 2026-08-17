@@ -32,6 +32,7 @@ function buildPdfData(session: any, results: any[]): PdfReportData {
   const tagCount = tags.summary.totalTableTags + tags.summary.totalColumnTags;
   const tablesWithTagsCount = tags.summary.tablesWithTags ?? 0;
   const totalTablesAndViews = (structure.summary.totalTables ?? 0) + (structure.summary.totalViews ?? 0);
+  const lineageNotVerifiable = lineage.verificationStatus === "not_verifiable";
   const lineageEdges = lineage.summary.totalEdges ?? 0;
   const secFuncs = security.summary.totalFunctions ?? 0;
   const grants = access.summary.totalGrants ?? 0;
@@ -63,10 +64,12 @@ function buildPdfData(session: any, results: any[]): PdfReportData {
     },
     {
       label: "Linhagem de dados rastreada",
-      passed: lineageEdges > 0,
-      detail: lineageEdges > 0
-        ? `${lineageEdges} relações de linhagem registradas em system.access.table_lineage.`
-        : "Nenhuma linhagem encontrada. Habilite o rastreamento de linhagem no Unity Catalog.",
+      passed: !lineageNotVerifiable && lineageEdges > 0,
+      detail: lineageNotVerifiable
+        ? `Não verificável — ${lineage.diagnostic?.message ?? "permissão insuficiente para consultar system.access.table_lineage."}`
+        : lineageEdges > 0
+          ? `${lineageEdges} relações de linhagem registradas em system.access.table_lineage.`
+          : "Nenhuma linhagem encontrada. Habilite o rastreamento de linhagem no Unity Catalog.",
     },
     {
       label: "Segurança dinâmica implementada",

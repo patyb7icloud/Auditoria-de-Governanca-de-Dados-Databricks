@@ -21,10 +21,16 @@ interface StatementResult {
   };
 }
 
+export interface ExecuteStatementOptions {
+  /** Preserve permission errors for analyses where an empty result is misleading. */
+  preservePermissionErrors?: boolean;
+}
+
 export async function executeStatement(
   config: DatabricksConfig,
   sql: string,
-  warehouseId?: string
+  warehouseId?: string,
+  options?: ExecuteStatementOptions
 ): Promise<{ columns: string[]; rows: Record<string, string | null>[] }> {
   const baseUrl = config.host.replace(/\/$/, "");
 
@@ -98,7 +104,10 @@ export async function executeStatement(
     const message = data.status.error?.message ?? "Query failed";
     // Consultas administrativas podem requerer USE CATALOG no `system`.
     // A auditoria do catálogo selecionado continua com os dados disponíveis.
-    if (/USE CATALOG on Catalog 'system'|INSUFFICIENT_PERMISSIONS/i.test(message)) {
+    if (
+      !options?.preservePermissionErrors &&
+      /USE CATALOG on Catalog 'system'|INSUFFICIENT_PERMISSIONS/i.test(message)
+    ) {
       console.warn("Consulta administrativa ignorada por falta de permissão no catalog system:", message);
       return { columns: [], rows: [] };
     }
@@ -291,26 +300,69 @@ export async function analyzeAccess(config: DatabricksConfig) {
 
 // ─── Analysis 5: Data Lineage ─────────────────────────────────────────────────
 
-export async function analyzeLineage(config: DatabricksConfig) {
-  // `system.access.table_lineage` é opcional e costuma exigir privilégios globais.
-  // Não interrompa uma auditoria do catalog por falta desse privilégio administrativo.
+export type LineageVerificationStatus = "verified" | "not_verifiable";
+
+export interface LineageDiagnostic {
+  code: "INSUFFICIENT_PERMISSIONS" | "LINEAGE_QUERY_FAILED";
+  message: string;
+}
+
+export interface LineageAnalysisResult {
+  lineageEdges: Record<string, string | null>[];
+  verificationStatus?: LineageVerificationStatus;
+  diagnostic?: LineageDiagnostic;
+  summary: {
+    totalEdges: number | null;
+    uniqueSources: number | null;
+    uniqueTargets: number | null;
+  };
+}
+
+export async function analyzeLineage(config: DatabricksConfig): Promise<LineageAnalysisResult> {
   let lineage: Awaited<ReturnType<typeof executeStatement>>;
   try {
-    lineage = await executeStatement(config, `SELECT source_table_catalog, source_table_schema, source_table_name, target_table_catalog, target_table_schema, target_table_name FROM system.access.table_lineage WHERE target_table_catalog = '${config.catalog}' OR source_table_catalog = '${config.catalog}' LIMIT 500`);
+    lineage = await executeStatement(
+      config,
+      `SELECT source_table_catalog, source_table_schema, source_table_name, target_table_catalog, target_table_schema, target_table_name FROM system.access.table_lineage WHERE target_table_catalog = '${config.catalog}' OR source_table_catalog = '${config.catalog}' LIMIT 500`,
+      undefined,
+      { preservePermissionErrors: true },
+    );
   } catch (error: any) {
-    if (!/USE CATALOG on Catalog 'system'|INSUFFICIENT_PERMISSIONS/i.test(error?.message ?? "")) throw error;
-    lineage = { columns: [], rows: [] };
+    const message = error?.message ?? "Não foi possível consultar a linhagem no Databricks.";
+    if (!/USE CATALOG on Catalog 'system'|USE SCHEMA on Schema 'system\.'|INSUFFICIENT_PERMISSIONS/i.test(message)) {
+      throw error;
+    }
+
+    return {
+      lineageEdges: [],
+      verificationStatus: "not_verifiable" as const,
+      diagnostic: {
+        code: "INSUFFICIENT_PERMISSIONS" as const,
+        message: "A linhagem não pôde ser verificada porque o principal não possui acesso a system.access.table_lineage.",
+      },
+      summary: {
+        totalEdges: null,
+        uniqueSources: null,
+        uniqueTargets: null,
+      },
+    };
   }
 
-  // Ensure rows are arrays (defensive programming)
   const lineageRows = lineage?.rows ?? [];
-
-  // Build adjacency for summary
-  const sourceSet = new Set(lineageRows.map((r) => `${r.source_table_schema}.${r.source_table_name}`));
-  const targetSet = new Set(lineageRows.map((r) => `${r.target_table_schema}.${r.target_table_name}`));
+  const sourceSet = new Set(
+    lineageRows
+      .filter((r) => r.source_table_schema && r.source_table_name)
+      .map((r) => `${r.source_table_schema}.${r.source_table_name}`),
+  );
+  const targetSet = new Set(
+    lineageRows
+      .filter((r) => r.target_table_schema && r.target_table_name)
+      .map((r) => `${r.target_table_schema}.${r.target_table_name}`),
+  );
 
   return {
     lineageEdges: lineageRows,
+    verificationStatus: "verified" as const,
     summary: {
       totalEdges: lineageRows.length,
       uniqueSources: sourceSet.size,
@@ -460,9 +512,18 @@ export function computeGovernanceScore(data: GovernanceAnalysisData): {
   }
 
   // 4. Lineage score (15 pts)
-  const lineageScore = data.lineage.summary.totalEdges > 0 ? 15 : 3;
+  const lineageNotVerifiable = data.lineage.verificationStatus === "not_verifiable";
+  const lineageScore = data.lineage.summary.totalEdges === null
+    ? 3
+    : data.lineage.summary.totalEdges > 0
+      ? 15
+      : 3;
   breakdown.lineage = lineageScore;
-  if (data.lineage.summary.totalEdges === 0) {
+  if (lineageNotVerifiable) {
+    const diagnostic = data.lineage.diagnostic?.message ?? "A consulta de linhagem não pôde ser verificada.";
+    gaps.push(`Linhagem não verificável — ${diagnostic}`);
+    recommendations.push("Conceda ao principal da auditoria USE CATALOG, USE SCHEMA e SELECT em system.access para verificar a linhagem.");
+  } else if (data.lineage.summary.totalEdges === 0) {
     gaps.push("Nenhuma linhagem de dados registrada — rastreabilidade comprometida");
     recommendations.push("Habilite o rastreamento de linhagem no Unity Catalog para garantir a rastreabilidade dos dados.");
   }

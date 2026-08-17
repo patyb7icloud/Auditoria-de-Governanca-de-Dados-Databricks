@@ -34,6 +34,8 @@ export interface LineageEdge {
 
 interface LineageGraphProps {
   edges: LineageEdge[];
+  verificationStatus?: "verified" | "not_verifiable";
+  diagnostic?: string;
   className?: string;
 }
 
@@ -104,7 +106,12 @@ const nodeTypes = { tableNode: TableNode };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function LineageGraph({ edges: lineageEdges, className }: LineageGraphProps) {
+export default function LineageGraph({
+  edges: lineageEdges,
+  verificationStatus = "verified",
+  diagnostic,
+  className,
+}: LineageGraphProps) {
   const { theme } = useTheme();
   const colorMode = theme === "dark" ? "dark" : "light";
   // Build unique nodes and edges from lineage data
@@ -189,14 +196,22 @@ export default function LineageGraph({ edges: lineageEdges, className }: Lineage
   );
 
   if (lineageEdges.length === 0) {
+    const notVerifiable = verificationStatus === "not_verifiable";
     return (
       <div className={cn("flex flex-col items-center justify-center rounded-xl bg-muted/20 border border-border py-14 text-center", className)}>
-        <div className="w-12 h-12 rounded-xl bg-gold-subtle border border-gold/20 flex items-center justify-center mb-4">
-          <ArrowRight className="w-6 h-6 text-gold/50" />
+        <div className={cn(
+          "w-12 h-12 rounded-xl border flex items-center justify-center mb-4",
+          notVerifiable ? "bg-warning/10 border-warning/20" : "bg-gold-subtle border-gold/20",
+        )}>
+          <ArrowRight className={cn("w-6 h-6", notVerifiable ? "text-warning/70" : "text-gold/50")} />
         </div>
-        <p className="text-sm font-semibold text-foreground mb-1">Nenhuma linhagem registrada</p>
-        <p className="text-xs text-muted-foreground max-w-xs">
-          Não foram encontradas relações de linhagem em <code className="font-mono text-gold/70">system.access.table_lineage</code> para o catálogo auditado.
+        <p className="text-sm font-semibold text-foreground mb-1">
+          {notVerifiable ? "Linhagem não verificável" : "Nenhuma linhagem registrada"}
+        </p>
+        <p className="text-xs text-muted-foreground max-w-md">
+          {notVerifiable
+            ? diagnostic ?? "O principal da auditoria não possui permissão para consultar system.access.table_lineage."
+            : <>Não foram encontradas relações de linhagem em <code className="font-mono text-gold/70">system.access.table_lineage</code> para o catálogo auditado.</>}
         </p>
       </div>
     );

@@ -227,6 +227,7 @@ export default function Dashboard() {
               const ok = result?.status === "completed";
               const failed = result?.status === "failed";
               const rd = result?.resultData as any;
+              const notVerifiable = rd?.verificationStatus === "not_verifiable";
 
               let detail = "";
               if (type === "structure" && rd) detail = `${rd.summary?.totalCatalogs ?? 0} catálogos · ${rd.summary?.totalSchemas ?? 0} schemas · ${rd.summary?.totalTables ?? 0} tabelas`;
@@ -238,7 +239,11 @@ export default function Dashboard() {
                 detail = `${totalTags} tags aplicadas · ${rd.summary?.tablesWithTags ?? 0} ativos cobertos · ${rd.summary?.uniqueTags ?? 0} tags únicas`;
               }
               if (type === "access" && rd) detail = `${rd.summary?.totalGrants ?? 0} grants · ${rd.summary?.uniqueGrantees ?? 0} grantees`;
-              if (type === "lineage" && rd) detail = `${rd.summary?.totalEdges ?? 0} relações · ${rd.summary?.uniqueSources ?? 0} origens`;
+              if (type === "lineage" && rd) {
+                detail = notVerifiable
+                  ? "Não verificável · permissão ausente em system.access"
+                  : `${rd.summary?.totalEdges ?? 0} relações · ${rd.summary?.uniqueSources ?? 0} origens`;
+              }
               if (type === "security" && rd) detail = `${rd.summary?.totalFunctions ?? 0} funções · ${rd.summary?.rowFilterCount ?? 0} filtros de linha`;
 
               return (
@@ -257,11 +262,13 @@ export default function Dashboard() {
                         <p className="text-sm font-semibold text-foreground leading-tight">{label}</p>
                       </div>
                     </div>
-                    {ok && <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />}
+                    {ok && !notVerifiable && <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />}
+                    {notVerifiable && <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />}
                     {failed && <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />}
                     {!result && <div className="w-4 h-4 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin" />}
                   </div>
-                  {detail && <p className="text-xs text-muted-foreground leading-relaxed">{detail}</p>}
+                  {detail && <p className={cn("text-xs leading-relaxed", notVerifiable ? "text-warning" : "text-muted-foreground")}>{detail}</p>}
+                  {notVerifiable && <p className="text-[10px] text-muted-foreground mt-1">{rd?.diagnostic?.message}</p>}
                   {failed && <p className="text-xs text-destructive mt-1">{result?.errorMessage ?? "Erro desconhecido"}</p>}
                   {result?.executionMs && (
                     <div className="flex items-center gap-1 mt-3 text-[10px] text-muted-foreground/60">
@@ -295,13 +302,19 @@ export default function Dashboard() {
               <div className="flex items-center gap-2">
                 <GitBranch className="w-5 h-5 text-gold" />
                 <h3 className="font-display font-bold text-foreground">Linhagem de Dados</h3>
-                {lineageData.summary?.totalEdges > 0 && (
+                {lineageData.verificationStatus === "not_verifiable" ? (
+                  <Badge variant="outline" className="text-warning border-warning/30 bg-warning/10 text-xs ml-1">
+                    Não verificável
+                  </Badge>
+                ) : lineageData.summary?.totalEdges > 0 ? (
                   <Badge variant="outline" className="text-gold border-gold/30 bg-gold-subtle text-xs ml-1">
                     {lineageData.summary.totalEdges} relações
                   </Badge>
-                )}
+                ) : null}
               </div>
-              {lineageData.summary?.totalEdges > 0 && (
+              {lineageData.verificationStatus === "not_verifiable" ? (
+                <p className="text-xs text-warning">{lineageData.diagnostic?.message}</p>
+              ) : lineageData.summary?.totalEdges > 0 && (
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   <span>{lineageData.summary.uniqueSources ?? 0} origens</span>
                   <span>·</span>
@@ -311,6 +324,8 @@ export default function Dashboard() {
             </div>
             <LineageGraph
               edges={(lineageData.lineageEdges ?? []) as LineageEdge[]}
+              verificationStatus={lineageData.verificationStatus}
+              diagnostic={lineageData.diagnostic?.message}
               className="w-full"
             />
           </div>
