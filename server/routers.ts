@@ -14,6 +14,7 @@ import {
   computeGovernanceScore,
   GovernanceAnalysisData,
 } from "./databricks";
+import { getDatabricksToken } from "./keyvault";
 import {
   createAuditSession,
   updateAuditSession,
