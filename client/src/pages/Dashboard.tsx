@@ -279,7 +279,7 @@ export default function Dashboard() {
             <FinOpsPanel />
           </div>
           <div className="lg:col-span-1">
-            <CopilotChat />
+            <CopilotChat host={session.databricksHost} catalog={session.targetCatalog} />
           </div>
         </div>
 

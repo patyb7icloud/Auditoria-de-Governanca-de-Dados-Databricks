@@ -390,7 +390,7 @@ export const appRouter = router({
 
   // Revolucionário: Copiloto e SecOps
   copilot: router({
-    ask: protectedProcedure
+    ask: publicProcedure
       .input(z.object({
         host: z.string(),
         token: z.string(),
@@ -400,7 +400,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return askCopilot(input, input.question);
       }),
-    checkAnomalies: protectedProcedure
+    checkAnomalies: publicProcedure
       .input(z.object({
         host: z.string(),
         token: z.string(),

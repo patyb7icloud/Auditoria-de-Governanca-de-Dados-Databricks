@@ -15,7 +15,7 @@ interface Message {
   actionRequired?: boolean;
 }
 
-export function CopilotChat() {
+export function CopilotChat({ host, token, catalog }: { host?: string, token?: string, catalog?: string }) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -57,7 +57,12 @@ export function CopilotChat() {
       content: userMsg
     }]);
 
-    // Recuperar config do localStorage
+    if (host && token && catalog) {
+      askMutation.mutate({ host, token, catalog, question: userMsg });
+      return;
+    }
+
+    // Fallback: Recuperar config do localStorage
     const configStr = localStorage.getItem('databricks_config');
     if (!configStr) {
       toast.error("Configuração do Databricks não encontrada. Por favor, reconecte-se.");
