@@ -2,6 +2,8 @@
 # RadarIA: inventory, 12-tag governance gate, Delta history and solution mapping.
 # Place this file beside radar_ia_core.py in a Databricks Repo/Workspace folder.
 # Secrets are read only from the Databricks Secret Scope; never paste secrets here.
+# Production safety: native agents/endpoints/tags are READ-ONLY. This job never
+# creates, replaces, assigns, or deletes native tags; writes below target only governance Delta tables.
 
 # COMMAND ----------
 
@@ -263,6 +265,7 @@ for agent in scan["agents"]:
     ))
 
 if mapping_rows:
+    # Update only the observed governance snapshot; never write tags back to native assets.
     mapping_df = spark.createDataFrame(mapping_rows, mapping_schema)
     key_condition = (
         "target.agent_id = source.agent_id AND "

@@ -2,6 +2,9 @@
 
 No credentials are stored in this module. OAuth secrets are supplied at runtime
 from a Databricks secret scope by the notebook entry point.
+
+Production safety: inventory/tag APIs are GET-only. The only POST requests in
+this module obtain OAuth tokens; no native tags or agent configurations are written.
 """
 from __future__ import annotations
 
@@ -248,6 +251,7 @@ def _read_serving_endpoint_tags(
     session: Any,
     timeout: int,
 ) -> tuple[dict[str, str], str | None, list[str]]:
+    """Read native serving-endpoint tags using GET only; never replace assignments."""
     url = f"{workspace_url}/api/2.0/serving-endpoints/{quote(endpoint_name, safe='')}"
     payload = _get_json(session, url, {"Authorization": f"Bearer {token}"}, {}, timeout)
     values, issues = _tag_map(payload.get("tags", []) if isinstance(payload, dict) else [])
@@ -262,6 +266,7 @@ def _read_genie_tags(
     session: Any,
     timeout: int,
 ) -> tuple[dict[str, str], str | None, list[str]]:
+    """Read Genie tag assignments using GET only; never mutate existing tags."""
     url = f"{workspace_url}/api/2.0/entity-tag-assignments/geniespaces/{quote(space_id, safe='')}/tags"
     assignments = _list_pages(
         session,

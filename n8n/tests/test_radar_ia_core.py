@@ -32,7 +32,11 @@ class FakeSession:
 
 
 class FakeScanSession:
+    def __init__(self):
+        self.calls = []
+
     def post(self, url, data=None, auth=None, timeout=None):
+        self.calls.append(("POST", url))
         if "/oidc/accounts/" in url:
             return FakeResponse({"access_token": "account-token"})
         if "ws-one.example" in url:
@@ -40,6 +44,7 @@ class FakeScanSession:
         return FakeResponse({"access_token": "workspace-token"})
 
     def get(self, url, headers=None, params=None, timeout=None):
+        self.calls.append(("GET", url))
         if "/api/2.0/accounts/account/workspaces" in url:
             return FakeResponse({"workspaces": [
                 {"workspace_id": 1, "workspace_name": "unavailable", "workspace_fqdn": "ws-one.example"},
@@ -170,8 +175,9 @@ class RadarIACoreTests(unittest.TestCase):
         }])
 
     def test_scanner_continues_when_one_workspace_authentication_fails(self):
+        session = FakeScanSession()
         result = scan_account(
-            "account", "client-id", "placeholder-secret", account_host="https://accounts.example", session=FakeScanSession()
+            "account", "client-id", "placeholder-secret", account_host="https://accounts.example", session=session
         )
         self.assertEqual(result["workspaces_found"], 2)
         self.assertEqual(result["scanned_workspace_ids"], ["2"])
@@ -180,6 +186,13 @@ class RadarIACoreTests(unittest.TestCase):
         self.assertEqual(result["agents"][0]["tag_read_status"], "EMPTY")
         self.assertEqual(result["workspaces"][1]["workspace_name"], "available")
         self.assertTrue(any(e["phase"] == "workspace_oauth" and e["workspace_id"] == "1" for e in result["workspace_errors"]))
+        api_calls = [(method, url) for method, url in session.calls if "/api/" in url]
+        self.assertTrue(api_calls)
+        self.assertTrue(all(method == "GET" for method, _ in api_calls), "Native Databricks API calls must stay read-only")
+        token_calls = [(method, url) for method, url in session.calls if method == "POST"]
+        self.assertTrue(token_calls)
+        self.assertTrue(all("/oidc/" in url for _, url in token_calls), "POST is allowed only for OAuth token requests")
+        self.assertTrue(any("/serving-endpoints/" in url for _, url in api_calls))
 
 
 if __name__ == "__main__":

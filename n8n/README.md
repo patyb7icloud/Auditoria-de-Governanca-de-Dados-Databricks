@@ -28,6 +28,16 @@ Pipeline CI/CD → Webhook do gate n8n
 
 A varredura dos agentes e as chamadas para a conta/workspaces acontecem **dentro do Databricks**. O n8n agenda e acompanha o job, lê o estado Delta, entrega notificações e serve como gate síncrono de CI/CD. A lógica de avaliação é determinística e não chama modelos ou serviços de LLM externos.
 
+## Garantia de preservação das tags existentes
+
+O RadarIA é **somente leitura para os ativos e tags nativos do Databricks**, inclusive soluções já em produção como `marteco`. A coleta usa `GET` para listar agentes/endpoints e ler tags de serving endpoints/Genie. O projeto não chama `POST`, `PUT`, `PATCH` ou `DELETE` para criar, substituir, atribuir ou remover tags, nem altera agentes, endpoints ou configurações de produção.
+
+As gravações são restritas às tabelas Delta de governança (`radar_scan_history`, `radar_scan_workspace_status` e `solution_mapping`) e, após entrega de alerta, à coluna `notified_admin` dessa última tabela. O `MERGE` atualiza apenas o **snapshot observado** em `solution_mapping`; ele não envia valores de volta ao Databricks nem substitui tags nativas. Se houver diferença, o sistema registra a divergência, alerta e/ou bloqueia a promoção; a correção da tag nativa permanece manual, sob o processo de mudança da equipe responsável.
+
+Os `POST` presentes nos workflows são usados para OAuth, `jobs/run-now` e para transportar instruções à SQL Statement API. Essas instruções são consultas `SELECT` ou uma atualização restrita aos marcadores de notificação da tabela Delta; não executam atribuição, substituição nem remoção de tags nativas.
+
+Para produção, conceda à identidade do scanner apenas leitura nos workspaces/ativos/tags e escrita limitada ao schema Delta de governança. Não conceda permissões de edição de agentes, serving endpoints ou atribuições de tags para executar este projeto.
+
 ## Artefatos
 
 - `workflows/01-radaria-inventory-alerts.json` — agendamento diário, disparo do job Databricks, polling com timeout, alertas e atualização `notified_admin`.
