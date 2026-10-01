@@ -495,7 +495,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const table = $env.GOVERNANCE_MAPPING_TABLE || 'governance.ai_inventory.solution_mapping';\nif (!/^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*){2}$/.test(table)) throw new Error('GOVERNANCE_MAPPING_TABLE deve ser catalog.schema.table.');\nconst esc = (value) => String(value ?? '').replace(/'/g, \"''\");\nconst r = $json;\nconst statement = `UPDATE ${table} SET notified_admin = TRUE, last_seen_at = CURRENT_TIMESTAMP(), updated_by = 'n8n-governance-alert' WHERE agent_id = '${esc(r.agent_id)}' AND agent_type = '${esc(r.agent_type)}' AND workspace_id = '${esc(r.workspace_id)}'`;\nreturn [{ json: { request: { warehouse_id: $env.DATABRICKS_SQL_WAREHOUSE_ID, statement, wait_timeout: '30s', on_wait_timeout: 'CONTINUE', disposition: 'INLINE', format: 'JSON_ARRAY' } } }];"
+        "jsCode": "const table = $env.GOVERNANCE_MAPPING_TABLE || 'governance.ai_inventory.solution_mapping';\nif (!/^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*){2}$/.test(table)) throw new Error('GOVERNANCE_MAPPING_TABLE deve ser catalog.schema.table.');\nconst esc = (value) => String(value ?? '').replace(/'/g, \"''\");\nconst r = $json;\nconst statement = `UPDATE ${table} SET notified_admin = TRUE, updated_by = 'n8n-governance-alert' WHERE agent_id = '${esc(r.agent_id)}' AND agent_type = '${esc(r.agent_type)}' AND workspace_id = '${esc(r.workspace_id)}'`;\nreturn [{ json: { request: { warehouse_id: $env.DATABRICKS_SQL_WAREHOUSE_ID, statement, wait_timeout: '30s', on_wait_timeout: 'CONTINUE', disposition: 'INLINE', format: 'JSON_ARRAY' } } }];"
       },
       "id": "deeb4b65-e87c-470a-9ca7-64149fefbc93",
       "name": "Preparar atualização notified_admin",

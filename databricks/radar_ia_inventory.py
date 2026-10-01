@@ -25,7 +25,7 @@ from pyspark.sql.types import (
 )
 from delta.tables import DeltaTable
 
-from radar_ia_core import REQUIRED_TAGS, scan_account, validate_agent
+from radar_ia_core import REQUIRED_TAGS, admin_notification_state, scan_account, validate_agent
 
 # COMMAND ----------
 
@@ -120,8 +120,11 @@ CREATE TABLE IF NOT EXISTS {mapping_table} (
   homologated_flag BOOLEAN,
   compliance_status STRING COMMENT 'CONFORME, PARCIAL ou NÃO_HOMOLOGADO',
   compliance_reasons ARRAY<STRING>,
-  first_seen_at TIMESTAMP, last_seen_at TIMESTAMP,
-  notified_admin BOOLEAN, updated_by STRING, alert_signature STRING,
+  first_seen_at TIMESTAMP COMMENT 'Primeira observação conhecida do ativo pelo RadarIA.',
+  last_seen_at TIMESTAMP COMMENT 'Horário da varredura mais recente que observou o ativo; não é horário de notificação.',
+  notified_admin BOOLEAN COMMENT 'TRUE após HTTP 2xx para finding não conforme; FALSE para ativos conformes ou alerta pendente.',
+  updated_by STRING,
+  alert_signature STRING COMMENT 'SHA-256 do ativo, status, tags observadas e motivos; identifica mudança no finding.',
   tag_read_status STRING
 ) USING DELTA
 """)
@@ -250,11 +253,7 @@ for agent in scan["agents"]:
     result = validate_agent(agent, registry_rows)
     key = (result["agent_id"], result["agent_type"], result["workspace_id"])
     old = previous.get(key, {})
-    signature_unchanged = old.get("alert_signature") == result["alert_signature"]
-    if result["homologated_flag"]:
-        notified_admin = True
-    else:
-        notified_admin = bool(old.get("notified_admin")) if signature_unchanged else False
+    notified_admin = admin_notification_state(result, old)
     mapping_rows.append((
         result["agent_id"], result["agent_name"], result["agent_type"],
         result["workspace_id"], result["workspace_name"], result["observed_tags"],

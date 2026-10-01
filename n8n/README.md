@@ -44,6 +44,7 @@ Para produção, conceda à identidade do scanner apenas leitura nos workspaces/
 - `workflows/02-production-tag-gate.json` — endpoint autenticado para pipeline CI/CD; falha em modo **fail-closed**.
 - `../databricks/radar_ia_inventory.py` — notebook/job Databricks que coleta, persiste e atualiza o De-Para.
 - `../databricks/radar_ia_core.py` — cliente REST e validação de tags, separado para testes.
+- `../databricks/GOVERNANCE_DATA_MODEL.md` — dicionário das tabelas Delta, chaves lógicas e ciclo de atualização.
 - `../databricks/job-template.json` — template do Job com `max_concurrent_runs=1` e parâmetros sem segredos.
 - `../databricks/sql/00-governance-schema.sql` — contrato de referência para tabelas Delta.
 - `../databricks/sql/10-finops-ai-monitoring.sql` — consultas para DBUs, AI Gateway e resumo do dashboard de conformidade.
@@ -183,7 +184,7 @@ python3 -m json.tool n8n/workflows/02-production-tag-gate.json >/dev/null
 python3 -m json.tool databricks/job-template.json >/dev/null
 ```
 
-Os testes cobrem a validação das 12 tags, divergências, regra de produção, paginação, resposta direta/envelope da Account API, deduplicação e continuação após falha isolada de workspace. A validação estática do JSON não substitui o teste de importação na versão n8n que será usada.
+Os testes cobrem a validação das 12 tags, divergências, regra de produção, paginação, resposta direta/envelope da Account API, deduplicação, continuação após falha isolada de workspace, APIs nativas somente GET e semântica do marcador de alerta sem reescrever `last_seen_at`. A validação estática do JSON não substitui o teste de importação na versão n8n que será usada.
 
 ## Segurança — ação necessária antes do go-live
 

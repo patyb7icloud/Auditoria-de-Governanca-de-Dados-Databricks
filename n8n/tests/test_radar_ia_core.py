@@ -1,3 +1,4 @@
+import json
 import pathlib
 import sys
 import unittest
@@ -5,7 +6,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "databricks"))
 
-from radar_ia_core import REQUIRED_TAGS, _list_pages, list_account_workspaces, scan_account, validate_agent
+from radar_ia_core import REQUIRED_TAGS, _list_pages, admin_notification_state, list_account_workspaces, scan_account, validate_agent
 
 
 class FakeResponse:
@@ -130,6 +131,27 @@ class RadarIACoreTests(unittest.TestCase):
         result = validate_agent({**self.agent, "observed_tags": duplicate_tags}, self.registry)
         self.assertEqual(result["compliance_status"], "PARCIAL")
         self.assertTrue(any("duplicada" in reason for reason in result["compliance_reasons"]))
+
+    def test_notification_flag_means_delivered_current_nonconforming_finding(self):
+        conforming = validate_agent(self.agent, self.registry)
+        self.assertFalse(admin_notification_state(conforming, {
+            "alert_signature": conforming["alert_signature"], "notified_admin": True
+        }))
+
+        changed = validate_agent({**self.agent, "observed_tags": {**self.tags, "risk_tier": "extreme"}}, self.registry)
+        previous = {"alert_signature": changed["alert_signature"], "notified_admin": True}
+        self.assertTrue(admin_notification_state(changed, previous))
+        changed_again = {**changed, "alert_signature": "new-finding-signature"}
+        self.assertFalse(admin_notification_state(changed_again, previous))
+
+    def test_alert_delivery_update_does_not_rewrite_last_seen_or_native_tags(self):
+        workflow_path = ROOT / "n8n" / "workflows" / "01-radaria-inventory-alerts.json"
+        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+        node = next(n for n in workflow["nodes"] if n["name"] == "Preparar atualização notified_admin")
+        statement_builder = node["parameters"]["jsCode"]
+        self.assertIn("SET notified_admin = TRUE, updated_by =", statement_builder)
+        self.assertNotIn("last_seen_at =", statement_builder)
+        self.assertNotIn("observed_tags =", statement_builder)
 
     def test_pagination_follows_next_page_token(self):
         session = FakeSession([

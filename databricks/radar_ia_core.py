@@ -530,3 +530,16 @@ def validate_agent(agent: dict[str, Any], registry_rows: Iterable[dict[str, Any]
         "compliance_reasons": sorted(set(reasons)),
         "alert_signature": signature,
     }
+
+
+def admin_notification_state(result: dict[str, Any], previous: dict[str, Any]) -> bool:
+    """Preserve delivery state only for the same nonconforming finding.
+
+    A conforming asset does not need an admin alert and must not be represented
+    as notified when no message was sent. A changed finding becomes pending again.
+    """
+    if result.get("compliance_status") == "CONFORME":
+        return False
+    if previous.get("alert_signature") != result.get("alert_signature"):
+        return False
+    return bool(previous.get("notified_admin"))

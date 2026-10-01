@@ -67,11 +67,11 @@ CREATE TABLE IF NOT EXISTS governance.ai_inventory.solution_mapping (
   homologated_flag BOOLEAN,
   compliance_status STRING COMMENT 'CONFORME, PARCIAL ou NÃO_HOMOLOGADO',
   compliance_reasons ARRAY<STRING>,
-  first_seen_at TIMESTAMP,
-  last_seen_at TIMESTAMP,
-  notified_admin BOOLEAN,
+  first_seen_at TIMESTAMP COMMENT 'Primeira observação conhecida do ativo pelo RadarIA.',
+  last_seen_at TIMESTAMP COMMENT 'Horário da varredura mais recente que observou o ativo; não é horário de notificação.',
+  notified_admin BOOLEAN COMMENT 'TRUE após HTTP 2xx para finding não conforme; FALSE para ativos conformes ou alerta pendente.',
   updated_by STRING,
-  alert_signature STRING,
+  alert_signature STRING COMMENT 'SHA-256 do ativo, status, tags observadas e motivos; identifica mudança no finding.',
   tag_read_status STRING
 )
 USING DELTA
