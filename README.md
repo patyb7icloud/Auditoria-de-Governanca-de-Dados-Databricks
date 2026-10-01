@@ -16,6 +16,7 @@ A documentação operacional e técnica completa está em [`docs/MANUAL_DA_FERRA
 | Histórico e comparação | Permite acompanhar sessões e comparar auditorias. |
 | Relatórios | Exporta dados da sessão e relatório PDF. |
 | Recursos avançados | Inclui módulos de copiloto, FinOps de IA, self-healing e monitoramento quando configurados. |
+| Governança de agentes de IA | Inclui projeto n8n/Databricks para inventário multiworkspace, validação das 12 tags canônicas, alertas e gate de produção em [`n8n/README.md`](n8n/README.md). |
 
 ## Início rápido
 
