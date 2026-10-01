@@ -1,0 +1,905 @@
+{
+  "name": "RadarIA - Inventário e alertas de governança de IA",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8bb5ee7f-84a9-4f41-9ae9-a4c2a39ac508",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1040,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "19e7b276-556f-405b-82fb-a7eb61b8c2fd",
+      "name": "Diariamente às 06:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/oidc/v1/token' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "scope",
+              "value": "all-apis"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "8d7f3e0a-ec56-4c72-8da3-7a13a6f5417b",
+      "name": "OAuth Databricks (workspace)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -780,
+        220
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "notes": "Vincule uma credencial HTTP Basic Auth do n8n: usuário = Client ID do Service Principal; senha = Client Secret. O token é temporário e não é gravado no workflow."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/api/2.1/jobs/run-now' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('OAuth Databricks (workspace)').first().json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ job_id: Number($env.DATABRICKS_JOB_ID) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "cf3ee1dd-a485-4d03-8b90-b02a37caa8fa",
+      "name": "Iniciar job radarIA no Databricks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -520,
+        220
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "notesInFlow": true,
+      "notes": "O job precisa executar databricks/radar_ia_inventory.py com a identidade técnica e o Secret Scope configurados."
+    },
+    {
+      "parameters": {
+        "jsCode": "const runId = $json.run_id;\nif (!runId) throw new Error('A API de Jobs não retornou run_id.');\nreturn [{ json: { run_id: runId, poll_count: 0 } }];"
+      },
+      "id": "4ccedbcc-ab39-4cb1-9ffc-47e037c08566",
+      "name": "Inicializar monitoramento do job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "b7d89c28-a44b-4d46-9f9c-6d81ae11e4ec",
+      "name": "Aguardar 10 segundos",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -20,
+        220
+      ],
+      "webhookId": "37d09719-7c70-4d2c-b29b-369ad2d39f48"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/api/2.1/jobs/runs/get' }}",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "run_id",
+              "value": "={{ $json.run_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('OAuth Databricks (workspace)').first().json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "4473a230-08c7-498a-9403-b0bdcd930840",
+      "name": "Consultar estado do job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "e2f52d91-4eb8-433f-81c0-2b2804da6908",
+      "name": "Mesclar estado e contexto do job",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        220,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $json.state || {};\nconst pollCount = Number($json.poll_count || 0) + 1;\nconst terminalStates = new Set(['TERMINATED', 'SKIPPED', 'INTERNAL_ERROR']);\nreturn [{ json: { ...$json, poll_count: pollCount, job_succeeded: state.life_cycle_state === 'TERMINATED' && state.result_state === 'SUCCESS', is_terminal: terminalStates.has(state.life_cycle_state) } }];"
+      },
+      "id": "53df19b1-a573-4ceb-8fee-604e0bbe93bd",
+      "name": "Interpretar estado e limite de polling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "terminal-condition",
+              "leftValue": "={{ $json.is_terminal }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "df3fb24d-c4c4-463a-ae46-d3cde32e5a82",
+      "name": "Job finalizado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "success-condition",
+              "leftValue": "={{ $json.job_succeeded }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7f1ac2ea-5d05-4251-a815-13c9c0a1b8a6",
+      "name": "Job concluído com sucesso?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "poll-budget",
+              "leftValue": "={{ $json.poll_count >= 90 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f5a520c-aab6-42df-8c21-30ee7ae045a9",
+      "name": "Limite de 15 minutos excedido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const workspaceUrl = $env.DATABRICKS_WORKSPACE_URL;\nconst warehouseId = $env.DATABRICKS_SQL_WAREHOUSE_ID;\nconst mappingTable = $env.GOVERNANCE_MAPPING_TABLE || 'governance.ai_inventory.solution_mapping';\nif (!workspaceUrl || !warehouseId) throw new Error('Defina DATABRICKS_WORKSPACE_URL e DATABRICKS_SQL_WAREHOUSE_ID.');\nif (!/^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*){2}$/.test(mappingTable)) throw new Error('GOVERNANCE_MAPPING_TABLE deve ser catalog.schema.table.');\nconst statement = `SELECT agent_id, agent_name, agent_type, workspace_id, workspace_name, ai_project_id, ai_solution, compliance_status, compliance_reasons, last_seen_at FROM ${mappingTable} WHERE COALESCE(notified_admin, FALSE) = FALSE AND COALESCE(compliance_status, 'NÃO_HOMOLOGADO') <> 'CONFORME' ORDER BY last_seen_at DESC LIMIT 1000`;\nreturn [{ json: { request: { warehouse_id: warehouseId, statement, wait_timeout: '30s', on_wait_timeout: 'CONTINUE', disposition: 'INLINE', format: 'JSON_ARRAY' } } }];"
+      },
+      "id": "465f04d2-4b1a-44f8-8e30-2b8c73cd85d3",
+      "name": "Preparar consulta de findings pendentes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/api/2.0/sql/statements' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('OAuth Databricks (workspace)').first().json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "b5e83d31-b849-4141-a218-282f2f396c48",
+      "name": "Consultar findings no solution_mapping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1450,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\nif (body.status?.state && body.status.state !== 'SUCCEEDED') throw new Error(`Consulta SQL não concluiu: ${body.status.state} ${body.status.error?.message || ''}`);\nconst columns = body.manifest?.schema?.columns?.map((c) => c.name) || [];\nconst rows = body.result?.data_array || [];\nif (!Array.isArray(rows)) throw new Error('Resposta SQL sem result.data_array.');\nif (!rows.length) return [{ json: { _noFindings: true } }];\nreturn rows.map((row) => {\n  const record = Object.fromEntries(columns.map((name, index) => [name, row[index]]));\n  let reasons = record.compliance_reasons || [];\n  if (typeof reasons === 'string') { try { reasons = JSON.parse(reasons); } catch { reasons = [reasons]; } }\n  if (!Array.isArray(reasons)) reasons = [];\n  return { json: { ...record, compliance_reasons: reasons, _noFindings: false } };\n});"
+      },
+      "id": "540f26cb-0357-4950-9336-e66c7083321f",
+      "name": "Converter findings em itens n8n",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1690,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-findings",
+              "leftValue": "={{ $json._noFindings !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "58e4b2ab-ce9b-4cb6-9b75-5a5e8b059a33",
+      "name": "Há findings para alertar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst channel = ($env.GOVERNANCE_ALERT_CHANNEL || 'slack').toLowerCase();\nreturn items.map((item) => {\n  const r = item.json;\n  const title = r.compliance_status === 'NÃO_HOMOLOGADO'\n    ? 'ALERTA DE GOVERNANÇA DE IA - NOVO ATIVO / NÃO HOMOLOGADO'\n    : 'ALERTA DE GOVERNANÇA DE IA - DIVERGÊNCIA DE TAGS';\n  const reasons = Array.isArray(r.compliance_reasons)\n    ? r.compliance_reasons\n    : (r.compliance_reasons ? [String(r.compliance_reasons)] : []);\n  const lines = [\n    'Workspace: ' + (r.workspace_name || 'N/D') + ' (ID ' + (r.workspace_id || 'N/D') + ')',\n    'Ativo: ' + (r.agent_name || 'N/D') + ' (' + (r.agent_type || 'N/D') + ')',\n    'Agent ID: ' + (r.agent_id || 'N/D'),\n    'Status: ' + (r.compliance_status || 'NÃO_HOMOLOGADO'),\n    'Projeto: ' + (r.ai_project_id || 'N/D') + ' / ' + (r.ai_solution || 'N/D'),\n    'Motivo: ' + (reasons.length ? reasons.join('; ') : 'Não conformidade identificada no AI Registry.'),\n    'Ação necessária: regularizar a declaração/tags no AI Registry em até 5 dias; o gate de produção continuará bloqueando o ativo.'\n  ];\n  const text = lines.join('\\n');\n  let payload;\n  if (channel === 'teams') {\n    payload = {\n      type: 'message',\n      attachments: [{\n        contentType: 'application/vnd.microsoft.card.adaptive',\n        content: {\n          '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',\n          type: 'AdaptiveCard',\n          version: '1.4',\n          body: [\n            { type: 'TextBlock', text: title, weight: 'Bolder', size: 'Medium', wrap: true },\n            { type: 'TextBlock', text, wrap: true }\n          ]\n        }\n      }]\n    };\n  } else {\n    payload = { text: '*' + title + '*\\n' + text };\n  }\n  return { json: { ...r, payload } };\n});"
+      },
+      "id": "cc6ad74e-fd95-436d-b106-0849f3e3d072",
+      "name": "Formatar alerta corporativo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GOVERNANCE_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data",
+              "neverError": false
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "c2e24937-b94f-4519-89cf-c33ab0352524",
+      "name": "Enviar alerta Teams ou Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2390,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notesInFlow": true,
+      "notes": "Configure GOVERNANCE_WEBHOOK_URL e GOVERNANCE_ALERT_CHANNEL=teams ou slack no ambiente n8n. O estado notified_admin só é atualizado após HTTP 2xx."
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "117742cb-0b41-4b89-b738-2117559aeeb4",
+      "name": "Confirmar entrega do alerta",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2610,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const table = $env.GOVERNANCE_MAPPING_TABLE || 'governance.ai_inventory.solution_mapping';\nif (!/^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*){2}$/.test(table)) throw new Error('GOVERNANCE_MAPPING_TABLE deve ser catalog.schema.table.');\nconst esc = (value) => String(value ?? '').replace(/'/g, \"''\");\nconst r = $json;\nconst statement = `UPDATE ${table} SET notified_admin = TRUE, last_seen_at = CURRENT_TIMESTAMP(), updated_by = 'n8n-governance-alert' WHERE agent_id = '${esc(r.agent_id)}' AND agent_type = '${esc(r.agent_type)}' AND workspace_id = '${esc(r.workspace_id)}'`;\nreturn [{ json: { request: { warehouse_id: $env.DATABRICKS_SQL_WAREHOUSE_ID, statement, wait_timeout: '30s', on_wait_timeout: 'CONTINUE', disposition: 'INLINE', format: 'JSON_ARRAY' } } }];"
+      },
+      "id": "deeb4b65-e87c-470a-9ca7-64149fefbc93",
+      "name": "Preparar atualização notified_admin",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2830,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/api/2.0/sql/statements' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('OAuth Databricks (workspace)').first().json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "fbb8d57c-7983-4104-9c8e-69b65ab31550",
+      "name": "Marcar notificação entregue no Delta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3060,
+        20
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $json.state || {};\nconst timedOut = Number($json.poll_count || 0) >= 90;\nconst title = timedOut ? 'ALERTA OPERACIONAL - TIMEOUT DO JOB RADARIA' : 'ALERTA OPERACIONAL - FALHA NO JOB RADARIA';\nconst details = timedOut ? `Job ${$json.run_id || 'N/D'} não terminou após 15 minutos. Estado: ${state.life_cycle_state || 'N/D'}; resultado: ${state.result_state || 'N/D'}.` : `Job ${$json.run_id || 'N/D'} terminou sem sucesso. Estado: ${state.life_cycle_state || 'N/D'}; resultado: ${state.result_state || 'N/D'}; mensagem: ${state.state_message || 'N/D'}.`;\nconst channel = ($env.GOVERNANCE_ALERT_CHANNEL || 'slack').toLowerCase();\nconst payload = channel === 'teams' ? { type: 'message', attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: { '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json', type: 'AdaptiveCard', version: '1.4', body: [{ type: 'TextBlock', text: title, weight: 'Bolder', wrap: true }, { type: 'TextBlock', text: details, wrap: true }] } }] } : { text: `*${title}*\\n${details}` };\nreturn [{ json: { payload } }];"
+      },
+      "id": "23576d09-f1bd-47ef-ae33-7629ce57918d",
+      "name": "Montar alerta operacional de falha",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GOVERNANCE_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "e3a1e0a5-09ac-4337-bc72-463b7e5ed0d1",
+      "name": "Notificar falha do job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1450,
+        520
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $json.status?.state;\nif (state !== 'SUCCEEDED') throw new Error(`UPDATE notified_admin não concluiu no Delta: ${state || 'sem status'}`);\nreturn [{ json: { update_state: state } }];"
+      },
+      "id": "c1d5d4e6-b193-4a61-9900-bc2e6dd993b0",
+      "name": "Confirmar atualização Delta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": {
+      "main": [
+        [
+          {
+            "node": "OAuth Databricks (workspace)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Diariamente às 06:00": {
+      "main": [
+        [
+          {
+            "node": "OAuth Databricks (workspace)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OAuth Databricks (workspace)": {
+      "main": [
+        [
+          {
+            "node": "Iniciar job radarIA no Databricks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iniciar job radarIA no Databricks": {
+      "main": [
+        [
+          {
+            "node": "Inicializar monitoramento do job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inicializar monitoramento do job": {
+      "main": [
+        [
+          {
+            "node": "Aguardar 10 segundos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aguardar 10 segundos": {
+      "main": [
+        [
+          {
+            "node": "Consultar estado do job",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mesclar estado e contexto do job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar estado do job": {
+      "main": [
+        [
+          {
+            "node": "Mesclar estado e contexto do job",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Mesclar estado e contexto do job": {
+      "main": [
+        [
+          {
+            "node": "Interpretar estado e limite de polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar estado e limite de polling": {
+      "main": [
+        [
+          {
+            "node": "Job finalizado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job finalizado?": {
+      "main": [
+        [
+          {
+            "node": "Job concluído com sucesso?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Limite de 15 minutos excedido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job concluído com sucesso?": {
+      "main": [
+        [
+          {
+            "node": "Preparar consulta de findings pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Montar alerta operacional de falha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limite de 15 minutos excedido?": {
+      "main": [
+        [
+          {
+            "node": "Montar alerta operacional de falha",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aguardar 10 segundos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar consulta de findings pendentes": {
+      "main": [
+        [
+          {
+            "node": "Consultar findings no solution_mapping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar findings no solution_mapping": {
+      "main": [
+        [
+          {
+            "node": "Converter findings em itens n8n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converter findings em itens n8n": {
+      "main": [
+        [
+          {
+            "node": "Há findings para alertar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Há findings para alertar?": {
+      "main": [
+        [
+          {
+            "node": "Formatar alerta corporativo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Formatar alerta corporativo": {
+      "main": [
+        [
+          {
+            "node": "Enviar alerta Teams ou Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Confirmar entrega do alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar alerta Teams ou Slack": {
+      "main": [
+        [
+          {
+            "node": "Confirmar entrega do alerta",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Confirmar entrega do alerta": {
+      "main": [
+        [
+          {
+            "node": "Preparar atualização notified_admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar atualização notified_admin": {
+      "main": [
+        [
+          {
+            "node": "Marcar notificação entregue no Delta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar alerta operacional de falha": {
+      "main": [
+        [
+          {
+            "node": "Notificar falha do job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar notificação entregue no Delta": {
+      "main": [
+        [
+          {
+            "node": "Confirmar atualização Delta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "America/Sao_Paulo",
+    "executionOrder": "v1"
+  },
+  "versionId": "ad09374a-d3e1-42cf-9c0a-86beb0302580",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

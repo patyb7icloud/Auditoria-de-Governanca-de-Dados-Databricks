@@ -1,0 +1,30 @@
+{
+  "name": "RadarIA - AI inventory governance",
+  "max_concurrent_runs": 1,
+  "tasks": [
+    {
+      "task_key": "radaria_inventory_governance",
+      "existing_cluster_id": "REPLACE_WITH_EXISTING_CLUSTER_ID",
+      "notebook_task": {
+        "notebook_path": "/Shared/AI-Governance/radar_ia_inventory",
+        "source": "WORKSPACE",
+        "base_parameters": {
+          "account_id": "REPLACE_WITH_DATABRICKS_ACCOUNT_ID",
+          "secret_scope": "governance-secrets",
+          "client_id_secret_key": "radaria-client-id",
+          "client_secret_secret_key": "radaria-client-secret",
+          "account_host": "https://accounts.azuredatabricks.net",
+          "registry_table": "governance.ai_inventory.ai_solution_registry",
+          "history_table": "governance.ai_inventory.radar_scan_history",
+          "workspace_status_table": "governance.ai_inventory.radar_scan_workspace_status",
+          "mapping_table": "governance.ai_inventory.solution_mapping",
+          "updated_by": "radarIA",
+          "report_output_path": ""
+        }
+      },
+      "libraries": [
+        {"pypi": {"package": "openpyxl==3.1.5"}}
+      ]
+    }
+  ]
+}

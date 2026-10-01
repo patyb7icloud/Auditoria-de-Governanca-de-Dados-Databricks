@@ -1,0 +1,383 @@
+{
+  "name": "AI Governance - Gate de promoção para produção",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-governance/production-gate",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a8bd7128-5f8c-43f7-8ab2-1775775f1f01",
+      "name": "Receber pedido do pipeline CI/CD",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -900,
+        160
+      ],
+      "webhookId": "0ad2983a-1e09-48e2-a967-716a6ca3520b",
+      "notesInFlow": true,
+      "notes": "Configure autenticação do Webhook (Header Auth) antes de ativar e limite quem pode solicitar promoção. O gate valida os dados recebidos e responde allow=true/false."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/oidc/v1/token' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "scope",
+              "value": "all-apis"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "7f9b845b-3b01-4f6b-bbad-dc85d86d9dc1",
+      "name": "OAuth Databricks (workspace)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        40
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "notes": "Vincule a mesma credencial HTTP Basic Auth do Service Principal Databricks usada no workflow de inventário."
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "e8cc3095-d436-4745-99ad-c960ef68a39b",
+      "name": "Preservar solicitação e token",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nlet request = input;\nif (typeof request === 'string') { try { request = JSON.parse(request); } catch { request = {}; } }\nconst tags = request?.tags && typeof request.tags === 'object' ? request.tags : {};\nconst required = ['ai_project_id','ai_solution','ai_component','environment','business_unit','owner_team','cost_center','data_classification','risk_tier','criticality','lifecycle','chargeback_model'];\nconst allowed = { ai_component: ['supervisor_agent','genie_agent','knowledge_assistant','model_serving','vector_search','rag','tool','evaluator'], environment: ['dev','qa','staging','prod'], data_classification: ['public','internal','confidential','restricted'], risk_tier: ['low','medium','high','critical'], criticality: ['low','medium','high','mission_critical'], lifecycle: ['design','pilot','production','retired'], chargeback_model: ['direct','shared','allocated'] };\nconst issues = [];\nconst missing = required.filter((key) => tags[key] === undefined || tags[key] === null || String(tags[key]).trim() === '');\nif (missing.length) issues.push(`Tags obrigatórias ausentes/vazias: ${missing.join(', ')}`);\nfor (const [key, values] of Object.entries(allowed)) if (tags[key] && !values.includes(String(tags[key]))) issues.push(`${key} inválida; valores permitidos: ${values.join(', ')}`);\nif (tags.ai_solution && !/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(String(tags.ai_solution))) issues.push('ai_solution deve ser um slug minúsculo.');\nif (tags.business_unit && !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(String(tags.business_unit))) issues.push('business_unit deve ser um slug/código sem espaços.');\nif (tags.owner_team && String(tags.owner_team).includes('@')) issues.push('owner_team deve ser grupo institucional, não e-mail pessoal.');\nif (tags.environment && tags.environment !== 'prod') issues.push('Este endpoint autoriza somente environment=prod.');\nif (tags.lifecycle && tags.lifecycle !== 'production') issues.push('Promoção para produção exige lifecycle=production.');\nif (tags.environment === 'prod' && tags.lifecycle && tags.lifecycle !== 'production') issues.push('environment=prod e lifecycle devem ser coerentes.');\nconst typeToComponent = { 'Supervisor Agent': 'supervisor_agent', 'Genie Agent': 'genie_agent', 'Knowledge Assistant': 'knowledge_assistant' };\nif (request.agent_type && typeToComponent[request.agent_type] && tags.ai_component !== typeToComponent[request.agent_type]) issues.push(`ai_component deve ser ${typeToComponent[request.agent_type]} para o tipo informado.`);\nconst normalizedTags = Object.fromEntries(required.map((key) => [key, tags[key] === undefined || tags[key] === null ? '' : String(tags[key]).trim()]));\nconst invalid = issues.length > 0;\nreturn [{ json: { valid: !invalid, issues: [...new Set(issues)], tags: normalizedTags, request_id: String(request.request_id || '').slice(0, 150), agent_name: String(request.agent_name || request.asset_name || '').slice(0, 300), agent_type: String(request.agent_type || 'AI Asset').slice(0, 100) } }];"
+      },
+      "id": "769b9dc0-7eab-44d1-b8f0-158cdb3951a5",
+      "name": "Validar contrato das 12 tags",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -650,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "gate-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e726799b-70cb-4aa1-9ce7-ae977ad7fd12",
+      "name": "Tags válidas para produção?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -410,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const table = $env.GOVERNANCE_REGISTRY_TABLE || 'governance.ai_inventory.ai_solution_registry';\nconst warehouse = $env.DATABRICKS_SQL_WAREHOUSE_ID;\nif (!warehouse) throw new Error('Defina DATABRICKS_SQL_WAREHOUSE_ID.');\nif (!/^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*){2}$/.test(table)) throw new Error('GOVERNANCE_REGISTRY_TABLE deve ser catalog.schema.table.');\nconst required = ['ai_project_id','ai_solution','ai_component','environment','business_unit','owner_team','cost_center','data_classification','risk_tier','criticality','lifecycle','chargeback_model'];\nconst q = (v) => `'${String(v).replace(/'/g, \"''\")}'`;\nconst predicates = required.map((key) => `${key} = ${q($json.tags[key])}`);\nconst statement = `SELECT COUNT(1) AS approved_match FROM ${table} WHERE approved = TRUE AND ${predicates.join(' AND ')}`;\nreturn [{ json: { ...$json, request: { warehouse_id: warehouse, statement, wait_timeout: '30s', on_wait_timeout: 'CONTINUE', disposition: 'INLINE', format: 'JSON_ARRAY' } } }];"
+      },
+      "id": "f6b4e13c-6b05-495f-86c9-806652162b21",
+      "name": "Consultar declaração aprovada no AI Registry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DATABRICKS_WORKSPACE_URL + '/api/2.0/sql/statements' }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('OAuth Databricks (workspace)').first().json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.request) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "27b5f3fb-616a-4a88-b6c9-ed2147bcbfd0",
+      "name": "Executar consulta de homologação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        580,
+        40
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "ace2146d-8315-416a-bc59-2d639e43d2ec",
+      "name": "Mesclar declaração e resultado SQL",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        820,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json;\nif (body.status?.state && body.status.state !== 'SUCCEEDED') throw new Error(`Consulta do AI Registry não concluiu: ${body.status.state} ${body.status.error?.message || ''}`);\nconst count = Number(body.result?.data_array?.[0]?.[0] || 0);\nconst approved = Number.isFinite(count) && count > 0;\nconst source = $('Consultar declaração aprovada no AI Registry').item.json;\nreturn [{ json: { httpStatus: approved ? 200 : 403, response: { allow: approved, status: approved ? 'APPROVED' : 'BLOCKED_NOT_IN_AI_REGISTRY', request_id: source.request_id || null, asset: source.agent_name || null, message: approved ? 'Promoção autorizada: 12 tags válidas e correspondência exata aprovada no AI Registry.' : 'Promoção bloqueada: o conjunto de 12 tags não corresponde a uma declaração aprovada no AI Registry.', issues: approved ? [] : ['Declaração exata não encontrada ou não aprovada no AI Registry.'] } } }];"
+      },
+      "id": "8a2622f4-e66b-4421-9cc7-b3c3ab9b5a97",
+      "name": "Decidir promoção pelo AI Registry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { httpStatus: 422, response: { allow: false, status: 'BLOCKED_TAG_VALIDATION', request_id: $json.request_id || null, asset: $json.agent_name || null, message: 'Promoção bloqueada antes da consulta ao AI Registry.', issues: $json.issues || ['Payload de tags inválido.'] } } }];"
+      },
+      "id": "b9fd6350-e5af-44b8-8fb5-3f120fa63dad",
+      "name": "Responder bloqueio por tags inválidas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.response) }}",
+        "options": {
+          "responseCode": "={{ $json.httpStatus }}"
+        }
+      },
+      "id": "4a181aec-d25b-4758-9302-fd09574c0989",
+      "name": "Responder ao pipeline CI/CD",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1300,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Receber pedido do pipeline CI/CD": {
+      "main": [
+        [
+          {
+            "node": "Validar contrato das 12 tags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar contrato das 12 tags": {
+      "main": [
+        [
+          {
+            "node": "Tags válidas para produção?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tags válidas para produção?": {
+      "main": [
+        [
+          {
+            "node": "OAuth Databricks (workspace)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preservar solicitação e token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder bloqueio por tags inválidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OAuth Databricks (workspace)": {
+      "main": [
+        [
+          {
+            "node": "Preservar solicitação e token",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Preservar solicitação e token": {
+      "main": [
+        [
+          {
+            "node": "Consultar declaração aprovada no AI Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar declaração aprovada no AI Registry": {
+      "main": [
+        [
+          {
+            "node": "Executar consulta de homologação",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mesclar declaração e resultado SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar consulta de homologação": {
+      "main": [
+        [
+          {
+            "node": "Mesclar declaração e resultado SQL",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Mesclar declaração e resultado SQL": {
+      "main": [
+        [
+          {
+            "node": "Decidir promoção pelo AI Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decidir promoção pelo AI Registry": {
+      "main": [
+        [
+          {
+            "node": "Responder ao pipeline CI/CD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder bloqueio por tags inválidas": {
+      "main": [
+        [
+          {
+            "node": "Responder ao pipeline CI/CD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "timezone": "America/Sao_Paulo",
+    "executionOrder": "v1"
+  },
+  "versionId": "8fdf8fdd-6077-4ad9-ae1e-52ea8b70f2fa",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
