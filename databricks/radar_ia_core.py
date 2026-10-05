@@ -17,7 +17,7 @@ from urllib.parse import quote
 import requests
 
 REQUEST_TIMEOUT_SECONDS = 30
-ACCOUNT_HOST = "https://accounts.azuredatabricks.net"
+ACCOUNT_HOST = "https://accounts.cloud.databricks.com"
 
 REQUIRED_TAGS = (
     "ai_project_id",

@@ -83,7 +83,7 @@ Status gravados em `solution_mapping`:
 
 ## Pré-requisitos de configuração
 
-1. Um workspace Databricks Azure com Jobs API, SQL Statement API e SQL Warehouse habilitados.
+1. Uma conta/workspace Databricks com Jobs API, SQL Statement API e SQL Warehouse habilitados; configure `account_host` de acordo com a cloud (para o domínio AWS `cloud.databricks.com`, use `https://accounts.cloud.databricks.com`).
 2. Um Service Principal técnico, sem dependência de usuário pessoal.
 3. A identidade que executa o job deve poder listar workspaces na conta, acessar cada workspace relevante, ler os três tipos de agente e ler endpoints/tags.
 4. Um Secret Scope no Databricks com as chaves do Service Principal de conta usadas pelo notebook. Os nomes padrão são `radaria-client-id` e `radaria-client-secret`; ambos são configuráveis por widgets. **Não** coloque esses valores no notebook, no n8n JSON, no repositório ou em parâmetros de job.

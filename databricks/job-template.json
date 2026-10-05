@@ -13,7 +13,7 @@
           "secret_scope": "governance-secrets",
           "client_id_secret_key": "radaria-client-id",
           "client_secret_secret_key": "radaria-client-secret",
-          "account_host": "https://accounts.azuredatabricks.net",
+          "account_host": "https://accounts.cloud.databricks.com",
           "registry_table": "governance.ai_inventory.ai_solution_registry",
           "history_table": "governance.ai_inventory.radar_scan_history",
           "workspace_status_table": "governance.ai_inventory.radar_scan_workspace_status",
