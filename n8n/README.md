@@ -48,6 +48,7 @@ Para produção, conceda à identidade do scanner apenas leitura nos workspaces/
 - `../databricks/job-template.json` — template do Job com `max_concurrent_runs=1` e parâmetros sem segredos.
 - `../databricks/sql/00-governance-schema.sql` — contrato de referência para tabelas Delta.
 - `../databricks/sql/10-finops-ai-monitoring.sql` — consultas para DBUs, AI Gateway e resumo do dashboard de conformidade.
+- `../databricks/sql/20-conformance-audit-queries.sql` — consultas somente leitura para auditoria de conformidade, pendências, Registry e cobertura.
 - `tests/test_radar_ia_core.py` — testes unitários sem conexão ou credenciais Databricks.
 - `docker-compose.yml` e `.env.example` — ambiente local opcional para n8n.
 - `REFERENCES.md` — documentação oficial n8n/Databricks usada nas decisões de implementação.
