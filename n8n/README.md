@@ -51,6 +51,7 @@ Para produção, conceda à identidade do scanner apenas leitura nos workspaces/
 - `../databricks/sql/20-conformance-audit-queries.sql` — consultas somente leitura para auditoria de conformidade, pendências, Registry e cobertura.
 - `tests/test_radar_ia_core.py` — testes unitários sem conexão ou credenciais Databricks.
 - `docker-compose.yml` e `.env.example` — ambiente local opcional para n8n.
+- `CONFIGURAR-CREDENCIAIS.md` — passo a passo de Account ID, OAuth M2M e Secret Scope, sem segredos no código.
 - `REFERENCES.md` — documentação oficial n8n/Databricks usada nas decisões de implementação.
 
 ## Contrato das tags
